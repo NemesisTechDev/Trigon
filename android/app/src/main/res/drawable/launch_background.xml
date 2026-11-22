@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pre-Flutter launch window (Android 11 and below): gold (the app icon's background) with the
+     black Trigon mark dead centre. splash_logo is the very same artwork, drawn at the
+     very same size (106 x 122 dp canvas: the 102 x 118 dp mark plus a 2 dp
+     transparent margin, so the image centre IS the mark's centre and nothing
+     can be clipped) that NemesisSplashScreen (Flutter) draws at the screen
+     centre, and it matches the launcher icon's (centred) logo, so nothing
+     moves at any hand-off. gravity="center" = no scaling, no offset. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/ic_launcher_background" />
+    <item>
+        <bitmap
+            android:src="@drawable/splash_logo"
+            android:gravity="center" />
+    </item>
+</layer-list>

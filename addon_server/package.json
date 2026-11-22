@@ -1,0 +1,10 @@
+{
+  "name": "namesis-addon",
+  "version": "1.0.0",
+  "description": "Stremio-protocol addon for Namesis Prime. Zero dependencies.",
+  "main": "server.js",
+  "scripts": { "start": "node server.js", "test": "node test.js" },
+  "engines": { "node": ">=18" },
+  "license": "UNLICENSED",
+  "private": true
+}

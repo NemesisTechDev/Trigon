@@ -1,0 +1,255 @@
+name: trigon
+description: "A new Flutter project."
+# The following line prevents the package from being accidentally published to
+# pub.dev using `flutter pub publish`. This is preferred for private packages.
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+# The following defines the version and build number for your application.
+# A version number is three numbers separated by dots, like 1.2.43
+# followed by an optional build number separated by a +.
+# Both the version and the builder number may be overridden in flutter
+# build by specifying --build-name and --build-number, respectively.
+# In Android, build-name is used as versionName while build-number used as versionCode.
+# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
+# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
+# Read more about iOS versioning at
+# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
+# In Windows, build-name is used as the major, minor, and patch parts
+# of the product and file versions while build-number is used as the build suffix.
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Native system Picture-in-Picture for the video player (enter/exit,
+  # auto-enter on backgrounding, and on-PiP-window media action buttons).
+  # Swapped in for `pip_plugin`, which is really just an experimental
+  # text-overlay-only wrapper around this same underlying plugin — going
+  # straight to simple_pip_mode gets the full video/media-actions API
+  # instead.
+  simple_pip_mode: ^1.1.0
+  native_device_orientation: ^2.0.3
+
+  media_kit: ^1.2.6
+  media_kit_video: ^2.0.1
+  media_kit_libs_video: ^1.0.7
+
+  # Lock-screen / notification "now playing" controls (Android MediaSession,
+  # iOS Now Playing Info)
+  audio_service: ^0.18.18
+
+  # Audio focus: requests exclusive "media" playback focus from
+  # Android/iOS and surfaces interruptions (another app's audio starting,
+  # a phone call, headphones disconnecting) as a stream — media_kit/mpv
+  # has no concept of audio focus on its own, so without this the app
+  # just keeps playing straight over anything else that starts. See
+  # PlayerManager._configureAudioSession/_handleAudioInterruption.
+  audio_session: ^0.2.4
+
+  wakelock_plus: ^1.2.8
+  screen_brightness: ^2.1.11
+  volume_controller: ^3.4.0
+  path_provider: ^2.1.3
+
+  cupertino_icons: ^2.0.0
+  intl: ^0.20.2
+
+  # Networking
+  dio: ^5.9.0
+
+  # Connection-type signal (Wi-Fi/cellular/offline) for the video Quality
+  # selector's Auto mode and music's automatic adaptive-bitrate switching —
+  # see NetworkQualityService, which combines this with a live bandwidth
+  # probe rather than relying on connection type alone.
+  connectivity_plus: ^7.3.1
+
+  # Local storage (replaces localStorage in React)
+  shared_preferences: ^2.5.3
+
+  # Encrypted token/user-ID storage (Android Keystore-backed), used by
+  # StorageService for auth credentials.
+  flutter_secure_storage: ^11.0.0
+
+  # Runtime permission requests (Android 13+ notification permission,
+  # requested in main.dart before AudioService.init).
+  permission_handler: ^13.0.2
+
+  # Download progress/queued/paused/failed/completed notifications in
+  # the system notification shade — see DownloadNotificationService.
+  # Uses the same POST_NOTIFICATIONS permission already requested above
+  # for audio_service's own "now playing" notification; no extra
+  # runtime prompt needed.
+  flutter_local_notifications: ^23.0.2
+
+  # Cached posters/backdrops/logos
+  cached_network_image: ^4.0.0
+
+  # Direct access to the disk cache cached_network_image sits on top of —
+  # used by the Profile & Settings "Clear Cache" action to empty it.
+  flutter_cache_manager: ^3.4.1
+
+  # Netflix-style animations
+  flutter_animate: ^4.5.2
+
+  # App routing
+  go_router: ^18.0.1
+
+  # SVG logos
+  flutter_svg: ^2.2.0
+
+  # Shimmer loading placeholders
+  shimmer: ^4.0.0
+
+  disk_space_plus: ^0.2.6
+
+  # Equalizer import/export (Settings > Equalizer): pick a preset file to
+  # import, and the system "save as" dialog to export one. Not verified
+  # against pub.dev from the build sandbox — run `flutter pub get`; if it
+  # reports a version conflict, bump/lower this constraint.
+  file_picker: ^13.1.0
+
+  # Google Fonts
+  google_fonts: ^8.2.1
+
+  # Hero carousel
+  carousel_slider: ^5.0.0
+
+  # Local Files (Music tab): queries audio files/metadata (title, artist,
+  # album, embedded artwork) from device storage via Android's MediaStore.
+  # Only ever touched when the person opts in via the Settings toggle.
+  on_audio_query: ^2.9.0
+
+  # Android TV device-class detection (checks for the
+  # android.software.leanback system feature) — see
+  # Responsive.resolveDeviceClass in lib/utils/responsive.dart. Deliberately
+  # not inferred from screen width/aspect ratio.
+  device_info_plus: ^13.2.0
+
+  # Google Cast (casting Phase 5) — GoogleCastTransport. Wraps the native
+  # Cast SDK for Chromecast/Google TV discovery, connection, and remote
+  # media control. See lib/casting/transports/google_cast_transport.dart's
+  # doc comment for the permission_handler version note this pulls in
+  # below.
+  flutter_chrome_cast: ^2.0.0
+
+  # Movie/TV trailer playback (Movies & TV Shows detail screens'
+  # Trailers popup — see TrailerSheet). Built on the official YouTube
+  # IFrame Player API via a WebView, so trailer playback is completely
+  # isolated from media_kit/PlayerManager/CastManager — no casting, no
+  # PiP, no shared player state, on purpose (see TrailerSheet's doc
+  # comment). Supports Android, iOS, macOS & Web only — NOT Windows
+  # desktop (no webview_flutter Windows embedding), which is why
+  # url_launcher below exists as the Windows fallback.
+  youtube_player_iframe: ^6.0.2
+
+  # Windows-only fallback for trailer playback (see TrailerSheet):
+  # since youtube_player_iframe has no Windows target, tapping a
+  # trailer card on Windows opens the YouTube URL in the system
+  # browser instead of trying to embed a player.
+  url_launcher: ^6.3.1
+
+  # On-device MKV -> MPEG-TS remux for casting a *local* file (no
+  # Jellyfin server to do it server-side — see
+  # lib/casting/local_video_transcode_service.dart's doc comment for the
+  # full story). The original `ffmpeg_kit_flutter` is dead (retired
+  # April 2025, prebuilt binaries pulled, `flutter pub get` 404s against
+  # it — see the note that used to be here). This is a maintained
+  # community continuation from a verified publisher, published via
+  # Maven Central/XCFrameworks rather than the abandoned binary-download
+  # infrastructure that killed the original. Deliberately the smallest
+  # `_min` variant, not the full/GPL one: this app only ever runs a
+  # `-c copy` stream-copy remux (no re-encoding), which core FFmpeg
+  # already handles with no external codec libraries needed — pulling in
+  # the GPL-licensed x264/x265/xvidcore bundle for a feature that never
+  # touches them would just be unnecessary APK size and license
+  # obligations for no benefit. Android-only usage in this app for now
+  # (see local_video_transcode_service.dart), though the package itself
+  # also builds for iOS/macOS/Windows.
+  ffmpeg_kit_flutter_new_min: ^3.1.0
+  firebase_core: ^5.1.0
+  firebase_auth: ^7.0.1
+  # Account sync (watch progress, watchlist, favorites, addons, settings)
+  # stored per signed-in user - see lib/services/sync/cloud_sync_service.dart.
+  # Guest mode never touches it.
+  cloud_firestore: ^7.1.0
+  firebase_app_check: ^0.5.1
+  google_sign_in: ^7.2.0
+
+  # Parental Controls: salted PBKDF2-HMAC-SHA256 hashing of the parental PIN
+  # (lib/services/parental/pin_hash.dart). Already pulled in transitively by
+  # other packages; listed because the app now imports it directly.
+  crypto: ^3.0.3
+  webview_flutter: ^4.14.1
+  webview_flutter_android: ^4.14.1
+  firebase_analytics: ^13.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # The "flutter_lints" package below contains a set of recommended lints to
+  # encourage good coding practices. The lint set provided by the package is
+  # activated in the `analysis_options.yaml` file located at the root of your
+  # package. See that file for information about deactivating specific lint
+  # rules and activating additional ones.
+  flutter_lints: ^6.0.0
+
+# flutter_chrome_cast (added above for casting Phase 5) declares
+# `permission_handler: ^12.0.0+1` in every version published through
+# 1.4.8 — this app already requires `permission_handler: ^13.0.1` (used
+# in main.dart for the notification/battery-optimization permission
+# prompts), and those two constraint ranges don't overlap at all, so
+# `flutter pub get` fails without this override. This is a targeted pin,
+# not a blanket downgrade: I checked permission_handler's own changelog,
+# and 13.0.0's only breaking change was bumping the plugin's own Android
+# compileSdk/AGP/Java build target — the Dart-facing API
+# (Permission.notification / Permission.ignoreBatteryOptimizations,
+# the only two calls this app makes) is unchanged between 12.x and 13.x.
+# So overriding the resolved version to what this app already uses
+# should not change flutter_chrome_cast's behavior at the Dart-API
+# level. Please run `flutter pub get` + `flutter analyze` (and a debug
+# build) to confirm — this reasoning is based on published changelogs,
+# not an actual resolve/build in this environment.
+dependency_overrides:
+  permission_handler: ^13.0.1
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/nemesis_logo.png
+
+  # To add assets to your application, add an assets section, like this:
+  # assets:
+  #   - images/a_dot_burr.jpeg
+  #   - images/a_dot_ham.jpeg
+
+  # An image asset can refer to one or more resolution-specific "variants", see
+  # https://flutter.dev/to/resolution-aware-images
+
+  # For details regarding adding assets from package dependencies, see
+  # https://flutter.dev/to/asset-from-package
+
+  # To add custom fonts to your application, add a fonts section here,
+  # in this "flutter" section. Each entry in this list should have a
+  # "family" key with the font family name, and a "fonts" key with a
+  # list giving the asset and other descriptors for the font. For
+  # example:
+  # fonts:
+  #   - family: Schyler
+  #     fonts:
+  #       - asset: fonts/Schyler-Regular.ttf
+  #       - asset: fonts/Schyler-Italic.ttf
+  #         style: italic
+  #   - family: Trajan Pro
+  #     fonts:
+  #       - asset: fonts/TrajanPro.ttf
+  #       - asset: fonts/TrajanPro_Bold.ttf
+  #         weight: 700
+  #
+  # For details regarding fonts from package dependencies,
+  # see https://flutter.dev/to/font-from-package

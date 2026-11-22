@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Gold adaptive-icon background (the app's accent gold, #D4AF37).
+         The black Trigon mark (mipmap/ic_launcher_foreground) sits on top. -->
+    <color name="ic_launcher_background">#D4AF37</color>
+</resources>

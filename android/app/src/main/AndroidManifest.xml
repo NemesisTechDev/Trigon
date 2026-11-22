@@ -1,0 +1,260 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Required so the app can run the media playback service in the
+         foreground while audio plays — this is what keeps playback (and
+         the lock-screen/notification widget) alive once the app is
+         backgrounded. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Downloads keep running with the screen off or the app in the
+         background through DownloadService (foreground service of type
+         dataSync; Android 14+ needs this permission for that type). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- In-app updates: lets Trigon hand a downloaded update APK to the
+         system installer. Android additionally asks the person to switch on
+         "Install unknown apps" for Trigon once (AppUpdater.kt opens that
+         exact screen). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Android 13+ requires this to be able to show any notification,
+         including the media one. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Lets media buttons on wired/Bluetooth headsets (play/pause/skip)
+         reach the app even when it isn't in the foreground. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Lets the app ask, once, to be exempted from Doze/App-Standby
+         battery restrictions (see the Permission.ignoreBatteryOptimizations
+         request in main.dart). Without this exemption, a stretch of
+         screen-off time can throttle the app's network access mid-stream
+         and background audio never recovers from the resulting stall —
+         this is the single biggest lever for reliable background
+         playback on stock Android, same permission Spotify/YouTube
+         Music/Jellyfin's own app all declare for the same reason. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- Local Files (Music tab): lets the app read audio files/metadata
+         from device storage via on_audio_query, only ever requested at
+         runtime when the person toggles "Local Files" on in Settings.
+         READ_MEDIA_AUDIO is the Android 13+ (API 33+) granular media
+         permission; READ_EXTERNAL_STORAGE is still required on older
+         OS versions and is capped at API 32 so newer devices aren't
+         asked for (and don't need) the old broad permission. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!-- Downloads: media files are written to the device's public
+         Download/Nemesis folder (see DownloadManager) rather than the
+         app's private sandbox, so they're visible in a file manager and
+         survive an uninstall. Android 11+ (API 30+) needs the "All
+         files access" special permission for plain File I/O against an
+         arbitrary public path — WRITE_EXTERNAL_STORAGE alone no longer
+         covers that under scoped storage. MANAGE_EXTERNAL_STORAGE is
+         requested at runtime (DownloadManager.ensureStoragePermission),
+         only the first time a download is started. -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+    <!-- Legacy fallback for the pre-Android-11 devices this app might
+         still run on, where MANAGE_EXTERNAL_STORAGE doesn't exist and
+         the classic runtime permission is what actually gates public
+         storage writes. maxSdkVersion=29 keeps it from being requested
+         (or needed) on Android 11+. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+
+    <!-- Nemesis Native casting (Phase 6): TV discovery over mDNS
+         (package:multicast_dns) sends/receives multicast UDP packets,
+         which Android gates behind these three permissions — the
+         standard set any UDP-multicast-based discovery library on
+         Android needs, not anything Nemesis-specific.
+
+         NEARBY_WIFI_DEVICES (added below) is for the Google Cast SDK, not for
+         multicast_dns: on Android 13+ the Cast SDK's own device discovery
+         needs it granted at runtime, otherwise no Chromecast / Google TV is
+         ever found. It is requested in main.dart
+         (_requestAndroidStartupPermissions). neverForLocation declares the
+         app doesn't derive physical location from Wi-Fi scans. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation" />
+
+    <!-- Server address is user-supplied at runtime (Settings -> server
+         URL) and can be a bare IP, a .local address, or a domain name,
+         each optionally over plain http:// rather than https:// (see
+         ServerUrlUtils.normalize's default-scheme logic). Android
+         blocks cleartext (http://) traffic by default from API 28+.
+         Flutter's project template papers over this for `flutter run`
+         debug builds via an auto-generated
+         android/app/src/debug/AndroidManifest.xml override that is NOT
+         merged into release builds - which is why every network call
+         (Jellyfin auth, streaming, image loads, downloads) was
+         silently blocked at the OS network layer in release only, even
+         though the app's own code and permissions were correct. Since
+         the server host is never known at build time, a
+         network_security_config.xml scoped to specific domains isn't
+         workable here - usesCleartextTraffic is the correct fix for an
+         app that has to support arbitrary self-hosted http:// addresses
+         by design, not just a blanket workaround. -->
+    <application
+        android:label="Trigon"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher"
+        android:enableOnBackInvokedCallback="true"
+        android:allowBackup="false"
+        android:requestLegacyExternalStorage="true"
+        android:extractNativeLibs="true"
+        android:usesCleartextTraffic="true">
+        <!-- launchMode="singleTask" (previously "singleTop" with
+             taskAffinity=""): when another app (a file manager, a share
+             sheet, etc.) starts MainActivity via the ACTION_VIEW
+             intent-filter below, it does so without
+             FLAG_ACTIVITY_NEW_TASK — Android's default in that situation
+             is to push the new Activity onto the CALLING app's own task,
+             not give it one of its own. "singleTop" doesn't prevent
+             that; it only dedupes repeat launches within whatever task
+             the Activity already ends up in. That's what was producing
+             "Nemesis opens nested inside the file manager" (its own
+             back-stack/back-gesture returns to the file manager, and it
+             can show up merged into that app's entry in Recents) and,
+             once already running that way, a second "Open With" pick
+             landing on a confused half-initialized instance rather than
+             cleanly resuming playback. "singleTask" is one of the two
+             launch modes (with "singleInstance") that Android *always*
+             gives its own task, regardless of what flags the caller
+             did or didn't set — matching every other video/audio player
+             app's launcher Activity. taskAffinity is left at its
+             default (the package name) rather than the empty-string
+             override that was here before, since an explicit affinity
+             is what singleTask actually keys off to find/create that
+             task. -->
+        <activity
+            android:name=".MainActivity"
+            android:supportsPictureInPicture="true"
+            android:resizeableActivity="true"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme"
+                />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+
+            <!-- "Open With"/"Play With" support: lets the OS offer Nemesis
+                 as a target for local audio/video files from a file
+                 manager, another app's share sheet, etc. Two <data> scheme
+                 entries plus two mimeType entries in the same filter, per
+                 Android's own guidance for "match by MIME type regardless
+                 of scheme" — declaring content: and file: explicitly is
+                 required for that (a mimeType-only <data> tag with no
+                 scheme at all never matches). See MainActivity's
+                 onNewIntent/configureFlutterEngine for how the picked
+                 file's Uri actually reaches Flutter, and
+                 ExternalMediaHandler (lib/services) for what happens with
+                 it from there. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="content"/>
+                <data android:scheme="file"/>
+                <data android:mimeType="audio/*"/>
+                <data android:mimeType="video/*"/>
+            </intent-filter>
+        </activity>
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+
+        <!-- Google Cast (casting Phase 5): points the Cast framework at
+             flutter_chrome_cast's own bundled OptionsProvider — this is
+             the plugin's class, not a hand-written one, since the
+             plugin reads the Cast Application ID from the Dart-side
+             GoogleCastOptionsAndroid(appId: ...) call
+             (GoogleCastTransport._ensureContextInitialized) at runtime
+             rather than needing a native subclass here. No MainActivity
+             change was needed for this. -->
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="com.felnanuke.google_cast.GoogleCastOptionsProvider" />
+
+        <!-- In-app updates: shares only <files>/updates with the system
+             installer (res/xml/update_file_paths.xml). Its own subclass so
+             it cannot clash with a FileProvider a plugin declares. -->
+        <provider
+            android:name=".UpdateFileProvider"
+            android:authorities="${applicationId}.updatefileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_file_paths" />
+        </provider>
+
+        <!-- Keeps the app process, the downloader and the built-in torrent
+             engine alive while downloads run (see DownloadService.kt). -->
+        <service
+            android:name=".DownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- Pause / Resume / Cancel buttons on the download notifications
+             (see DownloadNotifications.kt). -->
+        <receiver
+            android:name=".DownloadActionReceiver"
+            android:exported="false" />
+
+        <!-- Google Cast's own now-playing/media-route notification.
+             FOREGROUND_SERVICE_MEDIA_PLAYBACK is already declared above
+             for audio_service's notification — the same permission
+             covers this service too, nothing new to add there. -->
+        <service
+            android:name="com.google.android.gms.cast.framework.media.MediaNotificationService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <!-- audio_service: registers the app with the system media
+             session — this is the piece that makes the lock-screen /
+             notification "now playing" widget possible at all. -->
+        <service
+            android:name="com.ryanheise.audioservice.AudioService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="true"
+            tools:ignore="Instantiatable">
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
+
+        <!-- Routes headset/Bluetooth media-button presses (play/pause,
+             skip) to the app even when it's backgrounded. -->
+        <receiver
+            android:name="com.ryanheise.audioservice.MediaButtonReceiver"
+            android:exported="true"
+            tools:ignore="Instantiatable">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
+    </application>
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT"/>
+            <data android:mimeType="text/plain"/>
+        </intent>
+    </queries>
+</manifest>

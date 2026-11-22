@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Release builds run Android's resource shrinker, which deletes any resource
+  not referenced by identifier from code or XML. These drawables are only
+  referenced by STRING NAME at runtime (Dart passes 'drawable/ic_favorite_filled'
+  etc. to audio_service, which resolves them with Resources.getIdentifier()),
+  so without this list they are stripped from the release APK.
+
+  audio_service's own built-in transport icons (audio_service_play_arrow,
+  audio_service_pause, audio_service_skip_next, audio_service_skip_previous,
+  ...) are referenced the same way (MediaControl.play etc. carry
+  'drawable/audio_service_*' strings), so they need keeping too or the
+  notification renders with no buttons.
+
+  A stripped custom-action icon resolves to resource id 0, and Android's
+  PlaybackStateCompat.CustomAction.Builder throws on that, which breaks the
+  media session / notification / foreground service. Debug builds never
+  shrink, so it only fails in release.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_notification,@drawable/ic_favorite_filled,@drawable/ic_favorite_outline,@drawable/ic_repeat,@drawable/ic_repeat_one,@drawable/audio_service_*"
+    tools:shrinkMode="lenient" />

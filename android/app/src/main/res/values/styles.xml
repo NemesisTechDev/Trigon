@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Theme applied to the Android Window while the process is starting when the OS's Dark Mode setting is off -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <!-- Show a splash screen on the activity. Automatically removed when
+             the Flutter engine draws its first frame -->
+        <item name="android:windowBackground">@drawable/launch_background</item>
+
+        <!-- Android 12+ system splash (drawn BEFORE Flutter exists): black
+             with the Nemesis mark exactly at the screen centre, same size
+             and position as NemesisSplashScreen (Flutter) and as the
+             (centred) launcher icon logo, so there is no jump at any
+             hand-off. The Flutter splash starts with the mark already fully
+             visible, so it simply continues from this one. -->
+        <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/ic_launcher_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="31">@drawable/splash_icon</item>
+
+        <!-- Edge-to-edge: without these, the OS reserves solid,
+             opaque space for the status/nav bars and shrinks the
+             window to fit around them — that's the visible bar +
+             side letterboxing in landscape. windowDrawsSystemBarBackgrounds
+             + transparent bar colors let Flutter draw full-bleed
+             behind both bars instead, matching what SystemChrome sets
+             at runtime from Dart.
+
+             windowLayoutInDisplayCutoutMode is "always", not
+             "shortEdges" — shortEdges only extends content under a
+             cutout that sits on one of the device's *short* edges
+             (the top notch/punch-hole as measured in portrait). Once
+             the device rotates to landscape, that same physical
+             cutout is now on a long edge, shortEdges stops covering
+             it, and Android falls back to reserving solid opaque
+             space around it — which reads as "the bars aren't
+             transparent in landscape" even though the theme colors
+             above are correct. "always" extends content under the
+             cutout on every edge regardless of orientation, which is
+             what actually keeps both bars transparent after rotating. -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="28">always</item>
+
+        <!-- statusBarContrastEnforced / navigationBarContrastEnforced /
+             windowRotationAnimation were removed from the public SDK
+             in Android 16 (API 36) as part of making edge-to-edge
+             mandatory — compiling against compileSdk 36 means AAPT2
+             can no longer resolve these attrs at all (tools:targetApi
+             only suppresses lint, it doesn't gate compile-time
+             linking), so they've been dropped rather than gated. The
+             contrast-scrim toggle is moot anyway now that edge-to-edge
+             can't be opted out of; the rotation animation falls back
+             to the OS default ("rotate") without windowRotationAnimation
+             set explicitly. -->
+    </style>
+    <!-- Theme applied to the Android Window as soon as the process has started.
+         This theme determines the color of the Android Window while your
+         Flutter UI initializes, as well as behind your Flutter UI while its
+         running.
+
+         This Theme is only used starting with V2 of Flutter's Android embedding. -->
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <!-- Pure black, NOT ?android:colorBackground (white in this light
+             parent): this is the window colour shown between the native
+             splash and Flutter's first frame, and a light colour there is a
+             visible white flash between the two splashes. -->
+        <item name="android:windowBackground">@android:color/black</item>
+
+        <!-- Same edge-to-edge declarations as LaunchTheme above — this
+             is the theme active while the app is actually running, so
+             without these here too, the bars snap back to opaque the
+             moment the launch theme hands off to this one. See
+             LaunchTheme above for why each of these values is set the
+             way it is (cutout mode, contrast scrim, rotation
+             animation). -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="28">always</item>
+        <!-- See LaunchTheme above: statusBarContrastEnforced,
+             navigationBarContrastEnforced, and windowRotationAnimation
+             were removed from the public SDK in API 36 and no longer
+             compile. -->
+    </style>
+</resources>

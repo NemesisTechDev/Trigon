@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icon of the Android 12+ system splash.
+
+     WHY THE NUMBERS BELOW ARE NOT 106 x 122:
+     Android 12+ does NOT draw this drawable 1:1. For a splash icon that has
+     no icon background, the system renders it into a 160 dp canvas and then
+     scales that canvas up to its 288 dp icon box, i.e. every dimension is
+     multiplied by 288 / 160 = 1.8, and the result is clipped by the system's
+     circular icon mask (192 dp). With the mark declared at 106 x 122 dp it
+     therefore appeared 1.8x too large (~191 x 220 dp) next to the Flutter
+     splash (NemesisSplashScreen / SplashMark, 106 x 122 dp), and its edges
+     were cut off by that circular mask - which is what made the logo look
+     like it was sitting inside a rounded app-icon shape and caused the
+     visible jump in size at the hand-off.
+
+     The mark is therefore declared at the size that comes out as exactly
+     106 x 122 dp AFTER the system's 1.8x scale:
+         106 / 1.8 = 58.89 dp,   122 / 1.8 = 67.78 dp
+     (still the visible 102 x 118 dp mark plus the 2 dp transparent margin on
+     every side, scaled the same way). After scaling its half-diagonal is
+     ~81 dp, well inside the 96 dp radius of the mask, so nothing is cropped
+     and the logo just sits on the black splash background, same size and
+     same centre as the Flutter splash.
+
+     If the logo ever needs to be resized, change BOTH numbers together and
+     keep the ratio: size here = desired on-screen dp / 1.8. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:width="58.89dp"
+        android:height="67.78dp"
+        android:gravity="center">
+        <bitmap
+            android:src="@drawable/splash_logo"
+            android:gravity="fill" />
+    </item>
+</layer-list>

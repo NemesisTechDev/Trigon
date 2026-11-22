@@ -1,0 +1,288 @@
+﻿import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+
+import '../../../services/jellyfin_services/media_service.dart';
+import '../../../services/download_manager.dart';
+import '../../../widgets/common/download_button.dart';
+import '../../../widgets/common/watched_badge.dart';
+import '../../../widgets/common/pressable.dart';
+import '../../../widgets/common/play_icon_overlay.dart';
+import '../../../widgets/common/rating_badges.dart';
+import '../../../services/cache/nemesis_image_cache.dart';
+
+const _gold = Color(0xffD4AF37);
+
+/// Portrait-layout episode card: 16:9 thumbnail on the left, with
+/// episode number / name / preview / download button stacked to its
+/// right instead of underneath it. Same watched/progress/duration
+/// indicators as [EpisodeCardHorizontal] (the poster-style card the
+/// landscape row still uses) — this is a layout variant for the
+/// portrait list only, not a feature reduction.
+class EpisodeCardCompact extends StatelessWidget {
+  final dynamic episode;
+  final VoidCallback? onTap;
+
+  /// The parent series' IMDb id (from the series item's ProviderIds,
+  /// already loaded by the details screen) — used to look up this
+  /// episode's own rating via RatingsService.fetchEpisode. See that
+  /// method's doc for why this goes through the series' id rather than
+  /// the episode's own ProviderIds.
+  final String? seriesImdbId;
+
+  const EpisodeCardCompact({
+    super.key,
+    required this.episode,
+    this.onTap,
+    this.seriesImdbId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final id = episode["Id"] ?? "";
+    final name = episode["Name"] ?? "";
+    final overview = episode["Overview"] ?? "";
+    final number = episode["IndexNumber"]?.toString() ?? "";
+    final runtime = MediaService.formatRuntime(episode["RunTimeTicks"]);
+    final seasonNumber = (episode["ParentIndexNumber"] as num?)?.toInt();
+    final episodeNumber = (episode["IndexNumber"] as num?)?.toInt();
+    final hasEpisodeRating = seriesImdbId != null &&
+        seriesImdbId!.isNotEmpty &&
+        seasonNumber != null &&
+        episodeNumber != null;
+
+    final userData = episode["UserData"] ?? {};
+    final played = userData["Played"] == true;
+    final positionTicks = userData["PlaybackPositionTicks"] ?? 0;
+    final runtimeTicks = episode["RunTimeTicks"] ?? 0;
+
+    // Same definition Continue Watching / EpisodeCardHorizontal use:
+    // some progress saved, but not yet marked fully played.
+    final inProgress = !played && positionTicks > 0 && runtimeTicks > 0;
+    final progress =
+        inProgress ? (positionTicks / runtimeTicks).clamp(0.0, 1.0) : 0.0;
+
+    const thumbWidth = 140.0;
+    const thumbHeight = thumbWidth * 9 / 16;
+
+    return Pressable(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            /// Thumbnail
+            SizedBox(
+              width: thumbWidth,
+              height: thumbHeight,
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: CachedNetworkImage(
+                      cacheManager: NemesisImageCache.instance,
+                      imageUrl: MediaService.getEpisodeThumbUrl(id),
+                      width: thumbWidth,
+                      height: thumbHeight,
+                      fit: BoxFit.cover,
+                      // Fixed on-screen size — cap the decoded bitmap
+                      // to roughly that (at 2x for retina) instead of
+                      // decoding the full source image for a list that
+                      // can scroll through a lot of episodes.
+                      memCacheWidth: (thumbWidth * 2).toInt(),
+                      memCacheHeight: (thumbHeight * 2).toInt(),
+                      placeholder: (_, __) => Container(
+                        color: const Color(0xff252525),
+                      ),
+                      errorWidget: (_, __, ___) => Container(
+                        color: const Color(0xff252525),
+                        child: const Icon(
+                          Icons.movie_creation_outlined,
+                          color: Colors.white38,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Bottom scrim so the duration badge (and the
+                  // progress bar, when present) stay readable
+                  // regardless of what's underneath them.
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: thumbHeight * 0.55,
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: const BorderRadius.vertical(
+                            bottom: Radius.circular(12),
+                          ),
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.75),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  if (runtime.isNotEmpty)
+                    Positioned(
+                      left: 6,
+                      bottom: inProgress ? 11 : 6,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.play_arrow_rounded,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            runtime,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  if (played)
+                    const Positioned(
+                      top: 4,
+                      right: 4,
+                      child: WatchedBadge(),
+                    ),
+
+                  if (inProgress)
+                    Positioned(
+                      left: 5,
+                      right: 5,
+                      bottom: 5,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: progress,
+                          minHeight: 3,
+                          backgroundColor: Colors.white24,
+                          valueColor:
+                              const AlwaysStoppedAnimation<Color>(_gold),
+                        ),
+                      ),
+                    ),
+
+                  const PlayIconOverlay(size: 34),
+                ],
+              ),
+            ),
+
+            const SizedBox(width: 14),
+
+            /// Details
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (number.isNotEmpty)
+                    // scaleDown guard: this Expanded column's width
+                    // varies with the device/list width, and a couple
+                    // of rating badges next to the episode number can
+                    // run wider than it in narrower cases — shrinks
+                    // instead of overflowing.
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            "Episode $number",
+                            style: const TextStyle(
+                              color: _gold,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                          if (hasEpisodeRating) ...[
+                            const SizedBox(width: 8),
+                            RatingsRow(
+                              item: Map<String, dynamic>.from(episode),
+                              seriesImdbId: seriesImdbId,
+                              seasonNumber: seasonNumber,
+                              episodeNumber: episodeNumber,
+                              fontSize: 11,
+                              textColor: Colors.white70,
+                              badgeHeight: 12,
+                              gap: 6,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                  if (number.isNotEmpty) const SizedBox(height: 3),
+
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  Text(
+                    overview,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12.5,
+                      height: 1.35,
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  Align(
+                    alignment: Alignment.centerRight,
+                    // DownloadButton renders an IconButton, which
+                    // claims Material's 48dp minimum tap target
+                    // regardless of the 20px icon `size` passed below —
+                    // pin it to a compact box so it doesn't blow out
+                    // the row's height.
+                    child: SizedBox(
+                      height: 24,
+                      width: 24,
+                      child: DownloadButton(
+                        item: Map<String, dynamic>.from(episode),
+                        kind: DownloadKind.episode,
+                        size: 20,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
