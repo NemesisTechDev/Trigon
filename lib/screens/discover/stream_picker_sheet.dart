@@ -392,7 +392,7 @@ class _NoAddons extends StatelessWidget {
         children: [
           const Icon(Icons.extension_outlined, color: Colors.white38, size: 40),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             message,
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.white70, height: 1.4),
