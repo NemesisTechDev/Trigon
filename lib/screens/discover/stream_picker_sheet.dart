@@ -209,11 +209,17 @@ class _StreamPickerSheetState extends State<StreamPickerSheet> {
               ),
             ),
             Flexible(
-              child: ValueListenableBuilder<List<AddonManifest>>(
-                valueListenable: AddonManager.instance.addons,
-                builder: (context, installed, _) {
+              child: ListenableBuilder(
+                listenable: Listenable.merge([
+                  AddonManager.instance.addons,
+                  AddonManager.instance.defaultEnabled,
+                  AddonManager.instance.customEnabled,
+                ]),
+                builder: (context, _) {
                   if (!AddonManager.instance.hasStreamAddons) {
-                    return _NoAddons(onAdd: () async {
+                    return _NoAddons(
+                        message: AddonManager.instance.noAddonsMessage,
+                        onAdd: () async {
                       await Navigator.of(context).push(MaterialPageRoute<void>(
                         builder: (_) => const AddonsScreen(),
                       ));
@@ -373,8 +379,9 @@ class _StreamTile extends StatelessWidget {
 }
 
 class _NoAddons extends StatelessWidget {
+  final String message;
   final VoidCallback onAdd;
-  const _NoAddons({required this.onAdd});
+  const _NoAddons({required this.message, required this.onAdd});
 
   @override
   Widget build(BuildContext context) {
@@ -386,7 +393,7 @@ class _NoAddons extends StatelessWidget {
           const Icon(Icons.extension_outlined, color: Colors.white38, size: 40),
           const SizedBox(height: 12),
           const Text(
-            'No addons installed yet.\nAn addon is what finds something to play.',
+            message,
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.white70, height: 1.4),
           ),
@@ -397,7 +404,7 @@ class _NoAddons extends StatelessWidget {
               backgroundColor: const Color(0xFFD4AF37),
               foregroundColor: Colors.black,
             ),
-            child: const Text('Add an addon'),
+            child: const Text('Open addons'),
           ),
         ],
       ),

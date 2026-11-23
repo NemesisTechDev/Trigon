@@ -88,7 +88,7 @@ class _AddonQualitySheetState extends State<AddonQualitySheet> {
         return;
       }
       if (!AddonManager.instance.hasStreamAddons) {
-        _fail('No addon installed. Open Profile > Addons to add one.');
+        _fail(AddonManager.instance.noAddonsMessage);
         return;
       }
 

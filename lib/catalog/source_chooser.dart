@@ -106,10 +106,12 @@ class SourceChooser {
   /// preference rules in [StreamRules], as fast as it safely can:
   ///
   ///  - the title's name / language is looked up IN PARALLEL with the addons;
-  ///  - it starts as soon as the best possible link has arrived
-  ///    ([AutoLinkSelector.hasIdealLink]), or a short moment
-  ///    ([_graceAfterGoodDirect]) after the first direct link of the wanted
-  ///    quality, without waiting for the slow addons;
+  ///  - it starts a short moment ([_graceAfterGoodDirect]) after the first
+  ///    direct link of the wanted quality, without waiting for the slow
+  ///    addons (with Default and Data Saver the smallest of the direct links
+  ///    that have arrived by then is picked); with Max Quality it starts as
+  ///    soon as the best possible link has arrived
+  ///    ([AutoLinkSelector.hasIdealLink]);
   ///  - the addons that answer later keep feeding the fallback list.
   ///
   /// Otherwise: up to 12 s, then whatever has arrived is used. If nothing
@@ -311,7 +313,12 @@ class _LinkCollector {
   void _check() {
     final ctx = _ctx;
     if (ctx == null || _enough.isCompleted || latest.isEmpty) return;
-    if (AutoLinkSelector.hasIdealLink(latest, mode, ctx: ctx)) {
+    // Max Quality takes the best file type whatever the size, so it can
+    // start the moment the best possible link is here. Default and Data
+    // Saver pick the smallest direct link: a short wait after the first
+    // good one lets the other addons' links be compared too.
+    if (mode == PlaybackQualityMode.maxQuality &&
+        AutoLinkSelector.hasIdealLink(latest, mode, ctx: ctx)) {
       _release();
       return;
     }

@@ -18,6 +18,8 @@ import '../../widgets/common/dustbin_icon.dart';
 import '../../widgets/common/collapsing_screen_label.dart';
 import '../../widgets/common/pressable.dart';
 import '../../widgets/common/storage_usage_card.dart';
+import '../../addons/addon_manager.dart';
+import '../addons/addons_screen.dart';
 import 'parental_controls_screen.dart';
 import '../../services/parental/parental_controls.dart';
 import 'subtitle_style_screen.dart';
@@ -38,6 +40,12 @@ class AppSettingsScreen extends StatefulWidget {
 
 class _AppSettingsScreenState extends State<AppSettingsScreen> {
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    AddonManager.instance.load();
+  }
 
   // Lets _clearCache tell the storage breakdown card below to recompute
   // once clearing finishes, so its numbers reflect the freed space
@@ -323,7 +331,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   String _sourceModeLabel(PlaybackSourceMode mode) {
     switch (mode) {
       case PlaybackSourceMode.addons:
-        return "Default";
+        return "Addons";
       case PlaybackSourceMode.embed:
         return "Embed Servers";
     }
@@ -340,10 +348,19 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     }
   }
 
+  String _addonsSummary() {
+    final m = AddonManager.instance;
+    final custom = m.customEnabled.value && m.customAddons.isNotEmpty;
+    if (m.defaultEnabled.value && custom) return "Default and custom addons";
+    if (m.defaultEnabled.value) return "Default addons";
+    if (custom) return "Custom addons";
+    return "No active addons";
+  }
+
   String _sourceModeSummary(PlaybackSourceMode mode) {
     switch (mode) {
       case PlaybackSourceMode.addons:
-        return "Default, native player";
+        return "Addons, native player";
       case PlaybackSourceMode.embed:
         return "Embed servers, web player";
     }
@@ -607,6 +624,35 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                       subtitle: _sourceModeSummary(source),
                       onTap: _editPlaybackSourceMode,
                     ),
+                    if (source == PlaybackSourceMode.addons) ...[
+                      const SizedBox(height: 10),
+                      ListenableBuilder(
+                        listenable: Listenable.merge([
+                          AddonManager.instance.addons,
+                          AddonManager.instance.defaultEnabled,
+                          AddonManager.instance.customEnabled,
+                        ]),
+                        builder: (context, _) {
+                          return _settingsTile(
+                            icon: Icons.extension_outlined,
+                            label: "Addons",
+                            subtitle: _addonsSummary(),
+                            onTap: () async {
+                              if (!await ParentalControls.instance
+                                  .guardAddons(context)) {
+                                return;
+                              }
+                              if (!context.mounted) return;
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const AddonsScreen(),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ],
                     if (source == PlaybackSourceMode.embed) ...[
                       const SizedBox(height: 10),
                       ValueListenableBuilder<EmbedServer>(

@@ -33,6 +33,11 @@ class AddonManifest {
   final Map<String, List<String>> resourceTypes;
   final Map<String, List<String>> resourcePrefixes;
 
+  /// True for an addon the person added themselves (Settings > Addons >
+  /// Custom addons). False for the addons that come with the app (the
+  /// addresses in `default_addons.dart`).
+  final bool isCustom;
+
   const AddonManifest({
     required this.id,
     required this.name,
@@ -44,7 +49,28 @@ class AddonManifest {
     required this.idPrefixes,
     this.resourceTypes = const {},
     this.resourcePrefixes = const {},
+    this.isCustom = false,
   });
+
+  /// Identity of an installed addon. A custom addon may share its [id] with a
+  /// default one (the same addon with the person's own settings), so the id
+  /// alone is not enough to tell them apart.
+  String get key => '${isCustom ? 'c' : 'd'}:$id';
+
+  /// The same addon, marked as custom or default.
+  AddonManifest withCustom(bool custom) => AddonManifest(
+        id: id,
+        name: name,
+        version: version,
+        description: description,
+        baseUrl: baseUrl,
+        resources: resources,
+        types: types,
+        idPrefixes: idPrefixes,
+        resourceTypes: resourceTypes,
+        resourcePrefixes: resourcePrefixes,
+        isCustom: custom,
+      );
 
   /// True if this addon should be asked for [resource] of [type] with [id].
   bool supports(String resource, String type, String id) {
@@ -107,9 +133,16 @@ class AddonManifest {
         'idPrefixes': idPrefixes,
         'resourceTypes': resourceTypes,
         'resourcePrefixes': resourcePrefixes,
+        'custom': isCustom,
       };
 
-  factory AddonManifest.fromStored(Map<String, dynamic> json) {
+  /// [isDefaultUrl] is only used for an addon saved before the custom flag
+  /// existed: one whose address is not one of the app's default addresses
+  /// was added by the person, so it counts as custom.
+  factory AddonManifest.fromStored(
+    Map<String, dynamic> json, {
+    bool Function(String baseUrl)? isDefaultUrl,
+  }) {
     Map<String, List<String>> mapOfLists(dynamic v) {
       if (v is! Map) return const {};
       return v.map((k, val) => MapEntry(
@@ -121,17 +154,26 @@ class AddonManifest {
     List<String> strings(dynamic v) =>
         v is List ? v.map((e) => e.toString()).toList() : const [];
 
+    final baseUrl = json['baseUrl'].toString();
+    final bool custom;
+    if (json['custom'] is bool) {
+      custom = json['custom'] as bool;
+    } else {
+      custom = isDefaultUrl != null && !isDefaultUrl(baseUrl);
+    }
+
     return AddonManifest(
       id: json['id'].toString(),
       name: json['name'].toString(),
       version: (json['version'] ?? '').toString(),
       description: (json['description'] ?? '').toString(),
-      baseUrl: json['baseUrl'].toString(),
+      baseUrl: baseUrl,
       resources: strings(json['resources']),
       types: strings(json['types']),
       idPrefixes: strings(json['idPrefixes']),
       resourceTypes: mapOfLists(json['resourceTypes']),
       resourcePrefixes: mapOfLists(json['resourcePrefixes']),
+      isCustom: custom,
     );
   }
 }

@@ -134,6 +134,35 @@ class LinkRanking {
     return out;
   }
 
+  /// [links] (direct links of ONE quality, already ranked) with the smallest
+  /// file first. A link whose size is not known goes after every link whose
+  /// size is, and links of equal (or unknown) size keep the order they came
+  /// in (file type, then the addons' own order).
+  ///
+  /// Used by auto link selection only; downloads keep their own order.
+  static List<RankedLink> smallestFirst(List<RankedLink> links) {
+    int? sizeOf(RankedLink l) {
+      final b = l.info.sizeBytes;
+      return (b != null && b > 0) ? b : null;
+    }
+
+    final indexed = links.asMap().entries.toList()
+      ..sort((a, b) {
+        final sa = sizeOf(a.value);
+        final sb = sizeOf(b.value);
+        if (sa != null && sb != null) {
+          final bySize = sa.compareTo(sb);
+          if (bySize != 0) return bySize;
+        } else if (sa != null) {
+          return -1;
+        } else if (sb != null) {
+          return 1;
+        }
+        return a.key.compareTo(b.key);
+      });
+    return [for (final e in indexed) e.value];
+  }
+
   // ---- comparators ----
 
   static int _byTier(RankedLink a, RankedLink b) {

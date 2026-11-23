@@ -1,15 +1,22 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/material.dart';
 
 import '../../addons/addon_client.dart';
 import '../../addons/addon_manager.dart';
 import '../../addons/addon_models.dart';
-import '../../library/source_preferences.dart';
-import '../../torrent/torrent_engine.dart';
 
-/// Install / remove addons. An addon is any server that speaks the Stremio
-/// addon protocol, including the one in `addon_server/`.
+/// Settings > Addons.
+///
+///  - "Default addons": the addons that come with the app. On by default.
+///  - "Custom addons": addons the person adds here. Off by default, and it
+///    cannot be switched on until one has been added.
+///
+/// Links come from every addon whose switch is on. With both off, playing
+/// or downloading says there are no active addons (see
+/// [AddonManager.noAddonsMessage]).
+///
+/// The default addons are deliberately not listed (their addresses can carry
+/// a private key), and the torrent engine has no settings here: it stays
+/// hidden and runs by itself.
 class AddonsScreen extends StatefulWidget {
   /// True when shown as a root tab (no back arrow).
   final bool isTab;
@@ -22,6 +29,7 @@ class AddonsScreen extends StatefulWidget {
 class _AddonsScreenState extends State<AddonsScreen> {
   static const Color _gold = Color(0xFFD4AF37);
   static const Color _bg = Color(0xFF161616);
+  static const Color _card = Color(0xFF1F1F1F);
 
   final TextEditingController _url = TextEditingController();
   bool _busy = false;
@@ -31,13 +39,25 @@ class _AddonsScreenState extends State<AddonsScreen> {
   void initState() {
     super.initState();
     AddonManager.instance.load();
-    SourcePreferences.instance.load();
   }
 
   @override
   void dispose() {
     _url.dispose();
     super.dispose();
+  }
+
+  void _say(String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _toggleCustom(bool value) async {
+    final ok = await AddonManager.instance.setCustomEnabled(value);
+    if (!ok && mounted) {
+      _say('Add a custom addon below to use this option.');
+    }
   }
 
   Future<void> _add() async {
@@ -52,9 +72,9 @@ class _AddonsScreenState extends State<AddonsScreen> {
       final manifest = await AddonManager.instance.add(text);
       if (!mounted) return;
       _url.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Installed ${manifest.name}')),
-      );
+      _say(AddonManager.instance.customEnabled.value
+          ? 'Installed ${manifest.name}'
+          : 'Installed ${manifest.name}. Turn on Custom addons to use it.');
     } on AddonException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (e) {
@@ -64,8 +84,49 @@ class _AddonsScreenState extends State<AddonsScreen> {
     }
   }
 
+  Widget _switchCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.white, size: 22),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(subtitle,
+                    style:
+                        const TextStyle(color: Colors.white38, fontSize: 12)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Switch(value: value, onChanged: onChanged, activeColor: _gold),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final manager = AddonManager.instance;
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
@@ -78,11 +139,47 @@ class _AddonsScreenState extends State<AddonsScreen> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
           const Text(
-            'Addons decide what plays. Paste the address of your addon '
-            '(for example http://192.168.1.20:7000/manifest.json).',
+            'Addons decide where your links come from. Links are taken from '
+            'every addon that is switched on.',
             style: TextStyle(color: Colors.white60, height: 1.4),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
+          ValueListenableBuilder<bool>(
+            valueListenable: manager.defaultEnabled,
+            builder: (context, on, _) => _switchCard(
+              icon: Icons.extension_outlined,
+              title: 'Default addons',
+              subtitle: on
+                  ? 'Links come from the addons built into the app'
+                  : 'Off: the built-in addons are not used',
+              value: on,
+              onChanged: manager.setDefaultEnabled,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ValueListenableBuilder<bool>(
+            valueListenable: manager.customEnabled,
+            builder: (context, on, _) => _switchCard(
+              icon: Icons.add_link_rounded,
+              title: 'Custom addons',
+              subtitle: on
+                  ? 'Links also come from the addons you added'
+                  : 'Off: the addons you added are not used',
+              value: on,
+              onChanged: _toggleCustom,
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'ADD A CUSTOM ADDON',
+            style: TextStyle(
+              color: Colors.white38,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 10),
           TextField(
             controller: _url,
             keyboardType: TextInputType.url,
@@ -92,7 +189,7 @@ class _AddonsScreenState extends State<AddonsScreen> {
             onSubmitted: (_) => _add(),
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
-              hintText: 'Addon URL',
+              hintText: 'Addon URL (https://.../manifest.json)',
               hintStyle: const TextStyle(color: Colors.white38),
               filled: true,
               fillColor: const Color(0xFF222222),
@@ -118,218 +215,24 @@ class _AddonsScreenState extends State<AddonsScreen> {
                     ),
             ),
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Tip: from an Android emulator, your computer is 10.0.2.2.',
-            style: TextStyle(color: Colors.white38, fontSize: 12),
-          ),
-          const SizedBox(height: 16),
-          ValueListenableBuilder<bool>(
-            valueListenable: SourcePreferences.instance.autoPick,
-            builder: (context, on, _) => SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Auto-pick my last source',
-                  style: TextStyle(color: Colors.white)),
-              subtitle: const Text(
-                'Skip the source list when a title already has one you chose.',
-                style: TextStyle(color: Colors.white54, fontSize: 12.5),
-              ),
-              value: on,
-              onChanged: SourcePreferences.instance.setAutoPick,
-            ),
-          ),
-          const SizedBox(height: 12),
-          const _TorrentEngineCard(),
           const SizedBox(height: 16),
           ValueListenableBuilder<List<AddonManifest>>(
-            valueListenable: AddonManager.instance.addons,
-            builder: (context, list, _) {
-              if (list.isEmpty) {
+            valueListenable: manager.addons,
+            builder: (context, _, __) {
+              final custom = manager.customAddons;
+              if (custom.isEmpty) {
                 return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 32),
+                  padding: EdgeInsets.symmetric(vertical: 24),
                   child: Center(
-                    child: Text('No addons installed',
+                    child: Text('No custom addons added',
                         style: TextStyle(color: Colors.white38)),
                   ),
                 );
               }
               return Column(
-                children: [for (final a in list) _AddonCard(addon: a)],
+                children: [for (final a in custom) _AddonCard(addon: a)],
               );
             },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Settings for the local torrent engine that plays torrent-only sources.
-class _TorrentEngineCard extends StatefulWidget {
-  const _TorrentEngineCard();
-
-  @override
-  State<_TorrentEngineCard> createState() => _TorrentEngineCardState();
-}
-
-class _TorrentEngineCardState extends State<_TorrentEngineCard> {
-  static const Color _gold = Color(0xFFD4AF37);
-
-  final TextEditingController _url = TextEditingController();
-  final TextEditingController _exe = TextEditingController();
-  bool _busy = false;
-  bool? _ok;
-  bool _builtIn = false;
-  String? _status;
-
-  bool get _desktop =>
-      Platform.isWindows || Platform.isLinux || Platform.isMacOS;
-
-  @override
-  void initState() {
-    super.initState();
-    _init();
-  }
-
-  Future<void> _init() async {
-    await TorrentEngine.instance.load();
-    if (!mounted) return;
-    _url.text = TorrentEngine.instance.baseUrl;
-    _exe.text = TorrentEngine.instance.exePath;
-    final up = await TorrentEngine.instance.isRunning();
-    final embedded = (await TorrentEngine.instance.embeddedExe()) != null;
-    if (!mounted) return;
-    setState(() {
-      _builtIn = embedded;
-      _ok = up;
-      _status = up
-          ? 'Engine is running.'
-          : (embedded
-              ? 'Built-in engine is ready. It starts when you play a torrent.'
-              : 'Engine is not running.');
-    });
-  }
-
-  @override
-  void dispose() {
-    _url.dispose();
-    _exe.dispose();
-    super.dispose();
-  }
-
-  Future<void> _saveAndTest() async {
-    FocusScope.of(context).unfocus();
-    setState(() {
-      _busy = true;
-      _status = null;
-    });
-    await TorrentEngine.instance.save(url: _url.text, exe: _exe.text);
-    final up = await TorrentEngine.instance.ensureRunning();
-    if (!mounted) return;
-    setState(() {
-      _busy = false;
-      _ok = up;
-      _status = up
-          ? 'Engine is running.'
-          : (TorrentEngine.instance.lastStartError ??
-              'Not reachable. Check the address, or start TorrServer.');
-    });
-  }
-
-  InputDecoration _decoration(String hint) => InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white38),
-        filled: true,
-        fillColor: const Color(0xFF222222),
-        isDense: true,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide.none,
-        ),
-      );
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1F1F1F),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Torrent engine',
-              style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 15)),
-          const SizedBox(height: 4),
-          Text(
-            _builtIn
-                ? 'Torrent sources play through the engine built into this '
-                    'app. Nothing to install: it starts by itself when you '
-                    'play one. The fields below are only for using a '
-                    'different engine.'
-                : 'Some addons return torrents instead of direct links. They '
-                    'play through TorrServer, a free torrent engine. This '
-                    'build has none built in, so start TorrServer yourself '
-                    '(or point to one on your network), then tap Save & test.',
-            style: const TextStyle(
-                color: Colors.white54, fontSize: 12.5, height: 1.35),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _url,
-            keyboardType: TextInputType.url,
-            autocorrect: false,
-            enableSuggestions: false,
-            style: const TextStyle(color: Colors.white),
-            decoration: _decoration('Engine address (http://127.0.0.1:8090)'),
-          ),
-          if (_desktop) ...[
-            const SizedBox(height: 8),
-            TextField(
-              controller: _exe,
-              autocorrect: false,
-              enableSuggestions: false,
-              style: const TextStyle(color: Colors.white),
-              decoration: _decoration(
-                  'Optional: path to TorrServer so the app can start it'),
-            ),
-          ],
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              FilledButton(
-                onPressed: _busy ? null : _saveAndTest,
-                style: FilledButton.styleFrom(
-                  backgroundColor: _gold,
-                  foregroundColor: Colors.black,
-                ),
-                child: _busy
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.black),
-                      )
-                    : const Text('Save & test'),
-              ),
-              const SizedBox(width: 12),
-              if (_status != null)
-                Expanded(
-                  child: Text(
-                    _status!,
-                    style: TextStyle(
-                      color: _ok == true
-                          ? Colors.lightGreenAccent
-                          : Colors.orangeAccent,
-                      fontSize: 12.5,
-                    ),
-                  ),
-                ),
-            ],
           ),
         ],
       ),
@@ -394,7 +297,7 @@ class _AddonCard extends StatelessWidget {
           IconButton(
             tooltip: 'Remove',
             icon: const Icon(Icons.delete_outline, color: Colors.white54),
-            onPressed: () => AddonManager.instance.remove(addon.id),
+            onPressed: () => AddonManager.instance.remove(addon.key),
           ),
         ],
       ),

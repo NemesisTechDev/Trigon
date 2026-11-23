@@ -1,4 +1,6 @@
-﻿import 'package:flutter/gestures.dart';
+﻿import 'dart:async';
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/services.dart'
@@ -48,6 +50,13 @@ class _LoginScreenState extends State<LoginScreen>
   // shouldSave: true.
   bool _autofillFinished = false;
 
+  // Picking a saved email/password from the device's autofill list fills the
+  // fields in one go (a jump of several characters, where typing adds one at
+  // a time). That is how the screen notices a saved login was picked and
+  // signs in by itself. See _onCredentialsChanged.
+  int _prevPasswordLength = 0;
+  Timer? _autoSignInTimer;
+
   // Guards _handleBackPressed against a second gesture/press firing
   // while the first disconnect is still in flight (StorageService +
   // JellyfinClient.refresh below are both awaited, so there's a real
@@ -78,6 +87,8 @@ class _LoginScreenState extends State<LoginScreen>
     super.initState();
     // Set when a profile switch found that profile's session expired.
     usernameController.text = AccountStore.takePendingLoginUsername() ?? '';
+    _prevPasswordLength = passwordController.text.length;
+    passwordController.addListener(_onCredentialsChanged);
     _termsRecognizer.onTap = _openTermsPlaceholder;
     _switchModeRecognizer.onTap = _toggleSignUp;
     _forgotPasswordRecognizer.onTap = _forgotPassword;
@@ -87,8 +98,32 @@ class _LoginScreenState extends State<LoginScreen>
     )..forward();
   }
 
+  /// Signs in by itself when a saved login was picked from the autofill
+  /// list. The password field is filled in one step (several characters at
+  /// once, never by typing one key), and the email is already there. Only on
+  /// Sign In (never Sign Up, where the password is a new one), and a short
+  /// wait lets the email finish filling first.
+  void _onCredentialsChanged() {
+    final length = passwordController.text.length;
+    final jumped = length - _prevPasswordLength > 1;
+    _prevPasswordLength = length;
+    if (!jumped || _isSignUp || loading || _googleLoading) return;
+
+    _autoSignInTimer?.cancel();
+    _autoSignInTimer = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted || _isSignUp || loading || _googleLoading) return;
+      if (usernameController.text.trim().isEmpty ||
+          passwordController.text.isEmpty) {
+        return;
+      }
+      login();
+    });
+  }
+
   @override
   void dispose() {
+    _autoSignInTimer?.cancel();
+    passwordController.removeListener(_onCredentialsChanged);
     // Safety net for anyone leaving this screen without ever reaching
     // a successful login (back gesture, app backgrounded mid-entry,
     // etc.) — tells the autofill service not to prompt/save whatever
@@ -642,9 +677,16 @@ class _LoginScreenState extends State<LoginScreen>
                           keyboardType: TextInputType.emailAddress,
                           prefixIcon: Icons.mail_outline,
                           floating: false,
+                          // Sign In offers saved logins on THIS field too:
+                          // asking for both username and email is what
+                          // makes the device list them here and not only
+                          // on the password field.
                           autofillHints: _isSignUp
                               ? const [AutofillHints.email]
-                              : const [AutofillHints.username],
+                              : const [
+                                  AutofillHints.username,
+                                  AutofillHints.email,
+                                ],
                         ),
 
                         const SizedBox(height: 16),

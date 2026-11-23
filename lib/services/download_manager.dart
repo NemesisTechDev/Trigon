@@ -2538,8 +2538,7 @@ class DownloadManager extends ChangeNotifier {
         );
 
     if (!AddonManager.instance.hasStreamAddons) {
-      throw const _DownloadException(
-          'No addon installed. Open Profile > Addons to add one.');
+      throw _DownloadException(AddonManager.instance.noAddonsMessage);
     }
     final ep = job.episode;
     final id = ep != null

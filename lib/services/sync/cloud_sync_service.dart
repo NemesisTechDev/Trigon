@@ -8,7 +8,6 @@ import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../addons/addon_manager.dart';
-import '../../addons/addon_models.dart';
 import '../../library/source_preferences.dart';
 import '../../library/watch_history_service.dart';
 import '../../player/models/subtitle_appearance.dart';
@@ -70,6 +69,8 @@ class CloudSync with WidgetsBindingObserver {
     _Spec('source_prefs', 'namesis_source_prefs_v1', _Kind.string),
     _Spec('source_autopick', 'namesis_autopick_v1', _Kind.boolean),
     _Spec('addons', 'namesis_addons_v1', _Kind.string),
+    _Spec('addons_default_on', 'addons_default_enabled_v1', _Kind.boolean),
+    _Spec('addons_custom_on', 'addons_custom_enabled_v1', _Kind.boolean),
     _Spec('subtitle', 'subtitle_appearance_v1', _Kind.string),
     _Spec('eq_enabled', 'eq_enabled', _Kind.boolean),
     _Spec('eq_selected', 'eq_selected', _Kind.string),
@@ -856,7 +857,9 @@ class CloudSync with WidgetsBindingObserver {
           return _mergeKeyedList(
               a as String, b as String, (m) => '${m['type']}:${m['tmdbId']}');
         case 'addons':
-          return _mergeKeyedList(a as String, b as String, (m) => '${m['id']}');
+          // A custom addon can share its id with a default one.
+          return _mergeKeyedList(
+              a as String, b as String, (m) => '${m['id']}|${m['custom'] == true}');
         case 'eq_custom':
           return _mergeKeyedList(a as String, b as String, (m) => '${m['id']}');
         case 'watched':
@@ -995,20 +998,12 @@ class CloudSync with WidgetsBindingObserver {
     if (ids.contains('source_prefs') || ids.contains('source_autopick')) {
       await _try(() => SourcePreferences.instance.reloadFromStorage());
     }
-    if (ids.contains('addons')) {
-      await _try(() async {
-        final raw = p.getString('namesis_addons_v1');
-        final list = <AddonManifest>[];
-        if (raw != null && raw.isNotEmpty) {
-          final d = jsonDecode(raw);
-          if (d is List) {
-            for (final m in d.whereType<Map>()) {
-              list.add(AddonManifest.fromStored(Map<String, dynamic>.from(m)));
-            }
-          }
-        }
-        AddonManager.instance.addons.value = list;
-      });
+    final addonList = ids.contains('addons');
+    final addonSwitches =
+        ids.contains('addons_default_on') || ids.contains('addons_custom_on');
+    if (addonList || addonSwitches) {
+      await _try(() => AddonManager.instance
+          .reloadFromSaved(list: addonList, switches: addonSwitches));
     }
     if (ids.contains('subtitle')) {
       SubtitleAppearanceSettings.notifier.value =

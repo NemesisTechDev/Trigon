@@ -126,7 +126,7 @@ class VirtualPlayback {
       }
 
       if (!AddonManager.instance.hasStreamAddons) {
-        _abort('No addon installed. Open Profile > Addons to add one.',
+        _abort(AddonManager.instance.noAddonsMessage,
             fromPlayer: fromPlayer);
         return;
       }

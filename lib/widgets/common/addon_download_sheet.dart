@@ -125,7 +125,7 @@ class _AddonDownloadSheetState extends State<_AddonDownloadSheet> {
       if (!AddonManager.instance.hasStreamAddons) {
         setState(() {
           _searching = false;
-          _problem = 'No addon installed. Open Profile > Addons to add one.';
+          _problem = AddonManager.instance.noAddonsMessage;
         });
         return;
       }

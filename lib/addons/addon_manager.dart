@@ -34,7 +34,23 @@ class AddonManager {
   /// ('guest' | 'u:<uid>'; absent before the first sign-in or guest start).
   static const String _scopePrefsKey = 'cloudsync_scope_v1';
 
+  /// Settings > Addons > "Default addons" / "Custom addons". Kept on this
+  /// device only. Default addons are on until the person turns them off;
+  /// custom addons are off until the person turns them on (which needs at
+  /// least one custom addon).
+  static const String _defaultOnKey = 'addons_default_enabled_v1';
+  static const String _customOnKey = 'addons_custom_enabled_v1';
+
+  /// Every installed addon, default and custom. Use [activeAddons] for the
+  /// ones that are actually asked for links.
   final ValueNotifier<List<AddonManifest>> addons = ValueNotifier(const []);
+
+  /// The "Default addons" switch.
+  final ValueNotifier<bool> defaultEnabled = ValueNotifier(true);
+
+  /// The "Custom addons" switch. Can only be on while a custom addon exists
+  /// (see [setCustomEnabled]).
+  final ValueNotifier<bool> customEnabled = ValueNotifier(false);
 
   Future<void>? _loading;
   Future<void>? _seeding;
@@ -92,17 +108,136 @@ class AddonManager {
   Future<void> _loadStored() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_prefsKey);
-      if (raw == null || raw.isEmpty) return;
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) return;
-      addons.value = decoded
-          .whereType<Map>()
-          .map((m) => AddonManifest.fromStored(Map<String, dynamic>.from(m)))
-          .toList();
+      defaultEnabled.value = prefs.getBool(_defaultOnKey) ?? true;
+      customEnabled.value = prefs.getBool(_customOnKey) ?? false;
+      addons.value = parseStored(prefs.getString(_prefsKey));
+      await _normalizeToggles();
     } catch (e) {
       debugPrint('[AddonManager] failed to load addons: $e');
     }
+  }
+
+  /// True if [baseUrl] is one of the addresses in [kDefaultAddonUrls].
+  static bool isDefaultBaseUrl(String baseUrl) {
+    final base = AddonClient.normalizeBaseUrl(baseUrl);
+    if (base == null) return false;
+    for (final url in kDefaultAddonUrls) {
+      if (AddonClient.normalizeBaseUrl(url) == base) return true;
+    }
+    return false;
+  }
+
+  /// Reads the saved addon list. An addon saved before custom addons existed
+  /// is told apart by its address (see [AddonManifest.fromStored]).
+  static List<AddonManifest> parseStored(String? raw) {
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const [];
+      return decoded
+          .whereType<Map>()
+          .map((m) => AddonManifest.fromStored(
+                Map<String, dynamic>.from(m),
+                isDefaultUrl: isDefaultBaseUrl,
+              ))
+          .toList();
+    } catch (e) {
+      debugPrint('[AddonManager] failed to read addons: $e');
+      return const [];
+    }
+  }
+
+  /// Called by CloudSync when the saved addon list and/or the two switches
+  /// were replaced by a copy from another device. The switches are NOT
+  /// corrected here: the list and the switches can arrive one after the
+  /// other, and correcting in between would write a wrong value back to the
+  /// account. (A custom switch with no custom addon does nothing, because
+  /// there is nothing to switch on.)
+  Future<void> reloadFromSaved({bool list = true, bool switches = true}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (list) addons.value = parseStored(prefs.getString(_prefsKey));
+      if (switches) {
+        defaultEnabled.value = prefs.getBool(_defaultOnKey) ?? true;
+        customEnabled.value = prefs.getBool(_customOnKey) ?? false;
+      }
+      _lookups.clear();
+    } catch (e) {
+      debugPrint('[AddonManager] failed to reload addons: $e');
+    }
+  }
+
+  /// The custom switch cannot stay on without a custom addon.
+  Future<void> _normalizeToggles() async {
+    if (customEnabled.value && customAddons.isEmpty) {
+      customEnabled.value = false;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(_customOnKey, false);
+      } catch (_) {}
+    }
+  }
+
+  // ---- default / custom ----
+
+  /// The addons that come with the app.
+  List<AddonManifest> get defaultAddons =>
+      addons.value.where((a) => !a.isCustom).toList();
+
+  /// The addons the person added.
+  List<AddonManifest> get customAddons =>
+      addons.value.where((a) => a.isCustom).toList();
+
+  /// Whether this addon is asked for links right now (its group's switch is
+  /// on).
+  bool isActive(AddonManifest a) =>
+      a.isCustom ? customEnabled.value : defaultEnabled.value;
+
+  /// The addons asked for links and subtitles: the default ones while
+  /// "Default addons" is on, plus the custom ones while "Custom addons" is
+  /// on.
+  List<AddonManifest> get activeAddons =>
+      addons.value.where(isActive).toList();
+
+  /// True when no group is switched on, so nothing is asked for links
+  /// ("Custom addons" only counts as on while a custom addon exists).
+  bool get allSwitchedOff =>
+      !defaultEnabled.value &&
+      !(customEnabled.value && customAddons.isNotEmpty);
+
+  /// What to tell the person when a play or download finds no addon to ask.
+  String get noAddonsMessage => allSwitchedOff
+      ? 'No active addons. Turn one on in Settings > Addons.'
+      : 'No addon is available right now. Check your connection and try '
+          'again.';
+
+  Future<void> setDefaultEnabled(bool value) async {
+    if (defaultEnabled.value == value) return;
+    defaultEnabled.value = value;
+    _lookups.clear(); // the set of addons that are asked changed
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_defaultOnKey, value);
+    } catch (e) {
+      debugPrint('[AddonManager] failed to save the default switch: $e');
+    }
+  }
+
+  /// Turns "Custom addons" on or off. Returns false, changing nothing, when
+  /// asked to turn it on while there is no custom addon.
+  Future<bool> setCustomEnabled(bool value) async {
+    await load();
+    if (value && customAddons.isEmpty) return false;
+    if (customEnabled.value == value) return true;
+    customEnabled.value = value;
+    _lookups.clear();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_customOnKey, value);
+    } catch (e) {
+      debugPrint('[AddonManager] failed to save the custom switch: $e');
+    }
+    return true;
   }
 
   /// The active profile's scope id, as CloudSync keeps it.
@@ -140,12 +275,13 @@ class AddonManager {
       for (final url in kDefaultAddonUrls) {
         if (seeded.contains(url)) continue;
         try {
-          final manifest = await AddonClient.fetchManifest(url);
+          final manifest =
+              (await AddonClient.fetchManifest(url)).withCustom(false);
           // The person may have signed out or switched profile while the
           // address was being fetched. The answer then belongs to the old
           // profile: drop it, it is fetched again for the new one.
           if (_scopeId(prefs) != scope) break;
-          if (!addons.value.any((a) => a.id == manifest.id)) {
+          if (!addons.value.any((a) => !a.isCustom && a.id == manifest.id)) {
             addons.value = [...addons.value, manifest];
             _lookups.clear(); // the set of addons changed
             await _save();
@@ -174,15 +310,21 @@ class AddonManager {
     }
   }
 
-  /// Fetches the manifest at [url] and installs it. Re-adding the same addon
-  /// (same id) replaces the old entry, which is how you refresh one after
-  /// changing its address. Throws [AddonException] with a displayable message.
+  /// Fetches the manifest at [url] and installs it as a CUSTOM addon (the
+  /// addons that come with the app are installed by [_seedDefaults]).
+  /// Re-adding the same custom addon (same id) replaces the old entry, which
+  /// is how you refresh one after changing its address. Throws
+  /// [AddonException] with a displayable message.
   Future<AddonManifest> add(String url) async {
     await load();
-    final manifest = await AddonClient.fetchManifest(url);
+    if (isDefaultBaseUrl(url)) {
+      throw const AddonException(
+          'That addon is already included in Default addons.');
+    }
+    final manifest = (await AddonClient.fetchManifest(url)).withCustom(true);
     final next = [
       for (final a in addons.value)
-        if (a.id != manifest.id) a,
+        if (!(a.isCustom && a.id == manifest.id)) a,
       manifest,
     ];
     addons.value = next;
@@ -191,14 +333,19 @@ class AddonManager {
     return manifest;
   }
 
-  Future<void> remove(String id) async {
-    addons.value = addons.value.where((a) => a.id != id).toList();
+  /// Removes the installed addon with this [AddonManifest.key]. When the
+  /// last custom addon goes, the "Custom addons" switch goes off with it.
+  Future<void> remove(String key) async {
+    addons.value = addons.value.where((a) => a.key != key).toList();
     _lookups.clear();
     await _save();
+    await _normalizeToggles();
   }
 
+  /// True when at least one ACTIVE addon serves streams (see
+  /// [activeAddons]). Everything that plays or downloads asks this first.
   bool get hasStreamAddons =>
-      addons.value.any((a) => a.resources.contains('stream'));
+      activeAddons.any((a) => a.resources.contains('stream'));
 
   // ---- stream lookups (shared, remembered for a few minutes) ----
 
@@ -216,11 +363,12 @@ class AddonManager {
   /// or a new one. [fresh] skips the remembered answer (a link that has
   /// expired must be asked for again).
   _StreamLookup _lookupFor(String type, String id, {bool fresh = false}) {
-    final targets = addons.value
+    final targets = activeAddons
         .where((a) => a.supports('stream', type, id))
         .toList();
-    // A change to the installed addons makes an earlier answer out of date.
-    final signature = targets.map((a) => a.id).join('|');
+    // A change to the installed or switched-on addons makes an earlier
+    // answer out of date.
+    final signature = targets.map((a) => a.key).join('|');
     final key = '$type|$id';
 
     final existing = _lookups[key];
@@ -284,7 +432,7 @@ class AddonManager {
 
   Future<List<AddonSubtitle>> subtitlesFor(String type, String id) async {
     final targets =
-        addons.value.where((a) => a.supports('subtitles', type, id)).toList();
+        activeAddons.where((a) => a.supports('subtitles', type, id)).toList();
     final lists = await Future.wait(
       targets.map((a) => AddonClient.fetchSubtitles(a, type, id)),
     );

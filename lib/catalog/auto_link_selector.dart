@@ -39,8 +39,14 @@ class AutoLinkChoice {
 /// is only a foreign-language dub.
 ///
 /// Within a quality, a direct link always beats a torrent:
-///  - direct links are ranked by how well their file type matches the
+///  - with Default and Data Saver, when there are several direct links, the
+///    one with the SMALLEST file is picked (see [LinkRanking.smallestFirst]);
+///    links whose size is not listed come after those whose size is, and
+///    equal sizes are ranked by how well their file type matches the
 ///    preferred ones ([PreferredTier]), then by the addons' own order;
+///  - with Max Quality the size is ignored: direct links are ranked by how
+///    well their file type matches the preferred ones, then by the addons'
+///    own order;
 ///  - torrents are only the fallback, and are ranked by seeders, then peers,
 ///    then file type.
 ///
@@ -101,10 +107,26 @@ class AutoLinkSelector {
     }
   }
 
+  /// Whether the smallest file is preferred among direct links of one
+  /// quality: Default and Data Saver yes, Max Quality no (it takes the best
+  /// file type whatever the size).
+  static bool prefersSmallest(PlaybackQualityMode mode) =>
+      mode != PlaybackQualityMode.maxQuality;
+
+  static List<RankedLink> _directsInOrder(
+    RankedGroup g,
+    PlaybackQualityMode mode,
+  ) =>
+      prefersSmallest(mode) ? LinkRanking.smallestFirst(g.directs) : g.directs;
+
   /// True when the best possible link is already among [streams]: a direct
   /// link, at the quality the setting asks for first, of the top file type.
-  /// Nothing arriving later can beat it, so the caller can stop waiting for
-  /// the remaining addons.
+  ///
+  /// Only meaningful with Max Quality, where nothing arriving later can beat
+  /// it, so the caller can stop waiting for the remaining addons. With
+  /// Default and Data Saver the pick is the smallest direct link, which a
+  /// later addon may still beat, so playback waits the short grace period
+  /// after the first good direct link instead (see [hasGoodDirectLink]).
   static bool hasIdealLink(
     List<AddonStream> streams,
     PlaybackQualityMode mode, {
@@ -188,9 +210,11 @@ class AutoLinkSelector {
     for (var i = 0; i < heights.length; i++) {
       final g = groups[heights[i]]!;
       if (i == 0) {
-        // The wanted quality: every suitable direct link first, best first,
-        // so a direct link that fails is replaced by the next direct link.
-        for (final c in g.directs.take(maxDirectsPerQuality)) {
+        // The wanted quality: every suitable direct link first (smallest
+        // file first, except with Max Quality), so a direct link that fails
+        // is replaced by the next direct link.
+        for (final c
+            in _directsInOrder(g, mode).take(maxDirectsPerQuality)) {
           add(c);
         }
         // Only once all of them have failed: the torrent fallback (most
@@ -202,7 +226,8 @@ class AutoLinkSelector {
       } else {
         // Other qualities only matter once everything at the wanted one is
         // used up: their best direct links, then their best torrent.
-        for (final c in g.directs.take(maxOtherQualityDirects)) {
+        for (final c
+            in _directsInOrder(g, mode).take(maxOtherQualityDirects)) {
           add(c);
         }
         if (g.torrents.isNotEmpty) add(g.torrents.first);
