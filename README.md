@@ -2,7 +2,7 @@
 
 A Flutter-based streaming app and media player for Android, built with
 support for third-party content addons,embbed servers, local downloads, casting, and a
-full movie/TV/music library experience.
+full movie/TV show library experience.
 
 ## Features
 - Addon system for additional content sources
