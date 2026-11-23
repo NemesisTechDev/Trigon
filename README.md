@@ -1,17 +1,27 @@
-# namesis_prime
+# Trigon
 
-A new Flutter project.
+A Flutter-based streaming app and media player for Android, built with
+support for third-party content addons,embbed servers, local downloads, casting, and a
+full movie/TV/music library experience.
 
-## Getting Started
+## Features
+- Addon system for additional content sources
+- Embbed servers intergrated with an adblocker if prefered 
+- Downloads for offline playback (movies, episodes, music)
+- Casting support (Google Cast, DLNA)
+- Picture-in-picture, background audio, and a full music player
+- Parental controls with PIN-protected profiles
+- In-app update checks via GitHub Releases
 
-This project is a starting point for a Flutter application.
+## Download
 
-A few resources to get you started if this is your first Flutter project:
+Grab the latest APK from the [Releases](../../releases) page.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Built with
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Flutter, Firebase (Auth, Firestore, App Check), media_kit, and a custom
+torrent engine for local streaming.
+
+---
+
+Developed by [NemesisTechDev](https://github.com/NemesisTechDev).
