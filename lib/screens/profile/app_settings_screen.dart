@@ -809,12 +809,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
 
   Widget _sectionLabel(String text) {
     return Text(
-      text.toUpperCase(),
+      text.isEmpty ? text : text[0].toUpperCase() + text.substring(1).toLowerCase(),
       style: const TextStyle(
-        color: Colors.white38,
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 0.8,
+        color: Colors.white,
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
       ),
     );
   }

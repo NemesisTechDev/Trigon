@@ -4,7 +4,6 @@ import '../../services/update/update_config.dart';
 import '../../services/update/update_models.dart';
 import '../../services/update/update_service.dart';
 import '../../utils/app_fonts.dart';
-import '../auth/glass_card.dart';
 import '../common/pressable.dart';
 
 const Color _gold = Color(0xFFD4AF37);
@@ -89,9 +88,15 @@ class _UpdateOverlay extends StatelessWidget {
                   ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: GlassCard(
+                    child: Container(
                       padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
-                      borderRadius: 28,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF161616),
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.10),
+                        ),
+                      ),
                       child: SingleChildScrollView(
                         child: _CardBody(svc: svc),
                       ),
@@ -175,16 +180,7 @@ class _Header extends StatelessWidget {
     final accent = mandatory ? const Color(0xFFFF8A65) : _gold;
     return Row(
       children: [
-        Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: accent.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: accent.withValues(alpha: 0.35)),
-          ),
-          child: Icon(Icons.system_update_alt_rounded, color: accent, size: 25),
-        ),
+        Icon(Icons.cloud_download_outlined, color: accent, size: 46),
         const SizedBox(width: 14),
         Expanded(
           child: Column(
@@ -222,8 +218,8 @@ class _VersionRow extends StatelessWidget {
       children: [
         _VersionChip(label: 'Current', value: 'v${info.current}'),
         const Padding(
-          padding: EdgeInsets.only(bottom: 9, left: 14, right: 14),
-          child: Icon(Icons.arrow_forward_rounded, color: Colors.white38, size: 20),
+          padding: EdgeInsets.only(bottom: 7, left: 10, right: 10),
+          child: Icon(Icons.chevron_right_rounded, color: _gold, size: 24),
         ),
         _VersionChip(label: 'New', value: 'v${info.latest.version}', highlight: true),
       ],
@@ -250,7 +246,7 @@ class _VersionChip extends StatelessWidget {
         Text(
           label,
           style: const TextStyle(
-            color: Colors.white38,
+            color: Colors.white,
             fontSize: 11,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.6,
@@ -260,9 +256,7 @@ class _VersionChip extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: highlight
-                ? _gold.withValues(alpha: 0.16)
-                : Colors.white.withValues(alpha: 0.07),
+            color: Colors.transparent,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: highlight
@@ -273,7 +267,7 @@ class _VersionChip extends StatelessWidget {
           child: Text(
             value,
             style: TextStyle(
-              color: highlight ? _gold : Colors.white70,
+              color: highlight ? _gold : Colors.white,
               fontSize: 14,
               fontWeight: FontWeight.w700,
             ),
@@ -333,46 +327,24 @@ class _AvailableBody extends StatelessWidget {
           Text(
             'Download size  ·  ${_mb(size)}',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white38, fontSize: 12),
+            style: const TextStyle(color: Colors.white, fontSize: 12),
           ),
         ],
         const SizedBox(height: 18),
         if (info.mandatory)
-          Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: _SecondaryButton(label: 'Exit', onTap: svc.exitApp),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 3,
-                child: _PrimaryButton(
-                  label: 'Update',
-                  icon: Icons.download_rounded,
-                  onTap: svc.startUpdate,
-                ),
-              ),
-            ],
+          _PrimaryButton(
+            label: 'Update App',
+            icon: Icons.cloud_download_outlined,
+            onTap: svc.startUpdate,
           )
         else ...[
           _PrimaryButton(
-            label: 'Download & Install',
-            icon: Icons.download_rounded,
+            label: 'Update now',
+            icon: Icons.cloud_download_outlined,
             onTap: svc.startUpdate,
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _GhostButton(label: "Don't remind", onTap: svc.dontRemind),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _SecondaryButton(label: 'Later', onTap: svc.dismissLater),
-              ),
-            ],
-          ),
+          _SecondaryButton(label: 'Not now', onTap: svc.dismissLater),
         ],
       ],
     );
@@ -435,11 +407,10 @@ class _PermissionBody extends StatelessWidget {
           icon: Icons.settings_outlined,
           onTap: svc.openInstallSettings,
         ),
-        const SizedBox(height: 10),
-        _SecondaryButton(
-          label: mandatory ? 'Exit' : 'Not now',
-          onTap: mandatory ? svc.exitApp : svc.dismissLater,
-        ),
+        if (!mandatory) ...[
+          const SizedBox(height: 10),
+          _SecondaryButton(label: 'Not now', onTap: svc.dismissLater),
+        ],
       ],
     );
   }
@@ -481,15 +452,7 @@ class _ProgressBody extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: LinearProgressIndicator(
-            value: progress,
-            minHeight: 7,
-            color: _gold,
-            backgroundColor: Colors.white.withValues(alpha: 0.10),
-          ),
-        ),
+        _GoldProgressBar(value: progress),
         const SizedBox(height: 10),
         if (!verifying)
           Row(
@@ -499,13 +462,13 @@ class _ProgressBody extends StatelessWidget {
                 total > 0
                     ? '${_mb(received)} / ${_mb(total)}'
                     : _mb(received),
-                style: const TextStyle(color: Colors.white54, fontSize: 12.5),
+                style: const TextStyle(color: Colors.white, fontSize: 12.5),
               ),
               if (percent != null)
                 Text(
                   '$percent%',
                   style: const TextStyle(
-                    color: Colors.white54,
+                    color: Colors.white,
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
                   ),
@@ -517,6 +480,47 @@ class _ProgressBody extends StatelessWidget {
           _SecondaryButton(label: 'Cancel', onTap: svc.cancelDownload),
         ],
       ],
+    );
+  }
+}
+
+/// Pill-shaped progress bar: a gold outline with a gold fill inside it.
+/// [value] is 0..1, or null for an indeterminate (verifying) bar.
+class _GoldProgressBar extends StatelessWidget {
+  const _GoldProgressBar({required this.value});
+
+  final double? value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 16,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _gold, width: 1.5),
+      ),
+      child: value == null
+          ? ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: const LinearProgressIndicator(
+                color: _gold,
+                backgroundColor: Colors.transparent,
+              ),
+            )
+          : Align(
+              alignment: Alignment.centerLeft,
+              child: FractionallySizedBox(
+                widthFactor: value!.clamp(0.0, 1.0).toDouble(),
+                heightFactor: 1,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: _gold,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+              ),
+            ),
     );
   }
 }
@@ -575,11 +579,10 @@ class _ReadyBody extends StatelessWidget {
           icon: Icons.system_update_alt_rounded,
           onTap: svc.retry,
         ),
-        const SizedBox(height: 10),
-        _SecondaryButton(
-          label: mandatory ? 'Exit' : 'Later',
-          onTap: mandatory ? svc.exitApp : svc.dismissLater,
-        ),
+        if (!mandatory) ...[
+          const SizedBox(height: 10),
+          _SecondaryButton(label: 'Later', onTap: svc.dismissLater),
+        ],
       ],
     );
   }
@@ -604,18 +607,19 @@ class _ErrorBody extends StatelessWidget {
           text: svc.errorMessage ?? 'Something went wrong. Please try again.',
         ),
         const SizedBox(height: 18),
-        if (svc.errorRetryable) ...[
+        if (svc.errorRetryable)
           _PrimaryButton(
             label: 'Try again',
             icon: Icons.refresh_rounded,
             onTap: svc.retry,
           ),
-          const SizedBox(height: 10),
-        ],
-        _SecondaryButton(
-          label: mandatory ? 'Exit' : 'Close',
-          onTap: mandatory ? svc.exitApp : svc.dismissLater,
-        ),
+        if (!mandatory) ...[
+          if (svc.errorRetryable) const SizedBox(height: 10),
+          _SecondaryButton(label: 'Close', onTap: svc.dismissLater),
+        ] else if (!svc.errorRetryable)
+          // Mandatory and nothing to retry: keep a way out so the popup
+          // can never be a dead end.
+          _SecondaryButton(label: 'Exit', onTap: svc.exitApp),
       ],
     );
   }
@@ -631,12 +635,11 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      text.toUpperCase(),
+      text.isEmpty ? text : text[0].toUpperCase() + text.substring(1).toLowerCase(),
       style: const TextStyle(
-        color: Colors.white38,
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 0.8,
+        color: Colors.white,
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
       ),
     );
   }

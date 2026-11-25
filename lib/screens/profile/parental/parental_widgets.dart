@@ -20,19 +20,20 @@ class PcSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            label.toUpperCase(),
+            label.isEmpty
+                ? label
+                : label[0].toUpperCase() + label.substring(1).toLowerCase(),
             style: const TextStyle(
-              color: Colors.white38,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.8,
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
             ),
           ),
           if (hint != null) ...[
             const SizedBox(height: 4),
             Text(hint!,
                 style: const TextStyle(
-                    color: Colors.white30, fontSize: 12, height: 1.35)),
+                    color: Colors.white54, fontSize: 12, height: 1.35)),
           ],
         ],
       ),
@@ -41,7 +42,7 @@ class PcSection extends StatelessWidget {
 }
 
 class PcTile extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
   final String label;
   final String subtitle;
   final VoidCallback? onTap;
@@ -50,7 +51,7 @@ class PcTile extends StatelessWidget {
   final bool dimmed;
   const PcTile({
     super.key,
-    required this.icon,
+    this.icon,
     required this.label,
     required this.subtitle,
     this.onTap,
@@ -70,8 +71,10 @@ class PcTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(width: 14),
+          if (icon != null) ...[
+            Icon(icon, color: color, size: 22),
+            const SizedBox(width: 14),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -108,14 +111,14 @@ class PcTile extends StatelessWidget {
 }
 
 class PcToggle extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
   final String label;
   final String subtitle;
   final bool value;
   final ValueChanged<bool>? onChanged;
   const PcToggle({
     super.key,
-    required this.icon,
+    this.icon,
     required this.label,
     required this.subtitle,
     required this.value,

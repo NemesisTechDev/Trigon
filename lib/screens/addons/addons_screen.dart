@@ -171,12 +171,11 @@ class _AddonsScreenState extends State<AddonsScreen> {
           ),
           const SizedBox(height: 24),
           const Text(
-            'ADD A CUSTOM ADDON',
+            'Add a custom addon',
             style: TextStyle(
-              color: Colors.white38,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.8,
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 10),

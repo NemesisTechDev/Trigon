@@ -19,4 +19,5 @@
 const List<String> kDefaultAddonUrls = <String>[
   'https://torrentio.strem.fun/limit=5/manifest.json',
   'https://pengu.uk/%7B%22auth_token%22%3A%22875gejpiMXD-HaKLngvHqLqO23lQWk2-HOoKRyKdusc%22%7D/manifest.json',
+  'https://hdhub.thevolecitor.qzz.io/eyJ0b3Jib3giOiJ1bnNldCIsInF1YWxpdGllcyI6IjIxNjBwLDEwODBwLDcyMHAsNDgwcCIsInNvcnQiOiJkZXNjIiwiY2F0YWxvZ3MiOiIifQ/manifest.json',
 ];

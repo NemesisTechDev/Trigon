@@ -129,10 +129,6 @@ class _ParentalControlsScreenState extends State<ParentalControlsScreen> {
       title: 'Parental Controls',
       children: [
         const SizedBox(height: 8),
-        const Center(
-          child: Icon(Icons.shield_outlined, color: pcGold, size: 54),
-        ),
-        const SizedBox(height: 16),
         const Text(
           'Make this a safe place to watch',
           textAlign: TextAlign.center,
@@ -249,7 +245,6 @@ class _ParentalControlsScreenState extends State<ParentalControlsScreen> {
       children: [
         // Master switch + pause -------------------------------------------
         PcToggle(
-          icon: Icons.shield_outlined,
           label: 'Parental Controls',
           subtitle: s.enabled
               ? 'On for everyone using this device'

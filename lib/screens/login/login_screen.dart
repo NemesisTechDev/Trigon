@@ -10,7 +10,6 @@ import '../../services/jellyfin_services/auth_service.dart';
 import '../../services/jellyfin_services/jellyfin_client.dart';
 import '../../services/jellyfin_services/storage_service.dart';
 import '../../services/sync/cloud_sync_service.dart';
-import '../../utils/app_fonts.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/auth/floating_label_field.dart';
 import '../../widgets/auth/auth_background.dart';
@@ -553,9 +552,9 @@ class _LoginScreenState extends State<LoginScreen>
               // edge of the display, behind the status bar, like the home screen.
               padding: EdgeInsets.fromLTRB(
                 24 + MediaQuery.paddingOf(context).left,
-                20 + MediaQuery.paddingOf(context).top,
+                16 + MediaQuery.paddingOf(context).top,
                 24 + MediaQuery.paddingOf(context).right,
-                20 + MediaQuery.paddingOf(context).bottom,
+                16 + MediaQuery.paddingOf(context).bottom,
               ),
               // Constrains the form to a sane max width on tablet/TV so the
               // username/password fields and Sign In button don't stretch
@@ -572,50 +571,34 @@ class _LoginScreenState extends State<LoginScreen>
                   ),
                   child: Column(
                 children: [
+                  // Logo on the left, brand name on the right (same layout as the
+                  // top-left of the home screen), centered on the screen.
                   StaggeredEntrance(
                     controller: _entrance,
                     start: 0.0,
-                    end: 0.5,
-                    child: const BreathingLogo(size: 76),
-                  ),
-
-                  const SizedBox(height: 18),
-
-                  StaggeredEntrance(
-                    controller: _entrance,
-                    start: 0.08,
                     end: 0.6,
-                    child: RichText(
-                      text: TextSpan(
-                        style: AppFonts.dosis(
-                          fontSize: 29,
-                          fontWeight: FontWeight.bold,
-                        ).copyWith(letterSpacing: -0.4),
-                        children: const [
-                          TextSpan(text: "Trigon", style: TextStyle(color: gold)),
-                        ],
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        BreathingLogo(size: 52),
+                        SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            "Trigon",
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: gold,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
 
-                  const SizedBox(height: 6),
-
-                  StaggeredEntrance(
-                    controller: _entrance,
-                    start: 0.14,
-                    end: 0.65,
-                    child: Text(
-                      "WE GOT IT ALL",
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.5),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 4,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 44),
+                  const SizedBox(height: 28),
 
                   StaggeredEntrance(
                     controller: _entrance,
@@ -635,7 +618,7 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ),
 
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
 
                   StaggeredEntrance(
                     controller: _entrance,
@@ -646,7 +629,7 @@ class _LoginScreenState extends State<LoginScreen>
                       child: Text(
                         _isSignUp
                             ? "Sign up to sync your data across devices"
-                            : "Sign in to access your library and progress",
+                            : "Sign in to continue",
                         key: ValueKey(_isSignUp),
                         textAlign: TextAlign.center,
                         style: TextStyle(
@@ -657,7 +640,7 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ),
 
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 22),
 
                   // The email/password fields are NOT part of the staggered
                   // entrance any more. They used to fade in over the first
@@ -741,7 +724,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       child: Text(
                                         "Forgot your password?",
                                         style: TextStyle(
-                                          color: Colors.white.withValues(alpha: 0.55),
+                                          color: gold,
                                           fontSize: 13,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -835,18 +818,18 @@ class _LoginScreenState extends State<LoginScreen>
                                 ),
                         ),
 
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 20),
 
                         _isSignUp ? _buildCreateAccountButton() : _buildSignInButton(),
 
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
 
                         _buildSwitchModeRow(),
                       ],
                     ),
                     ),
 
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 22),
 
                   StaggeredEntrance(
                     controller: _entrance,
@@ -855,11 +838,11 @@ class _LoginScreenState extends State<LoginScreen>
                     child: Column(
                       children: [
                         _buildOrDivider(),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
                         _buildGoogleButton(),
                         const SizedBox(height: 12),
                         _buildContinueWithoutAccountButton(),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 12),
                         Text(
                           "Your data will only be stored locally",
                           style: TextStyle(
