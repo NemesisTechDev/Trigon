@@ -7,7 +7,7 @@ full movie/TV show library experience.
 ## Features
 - Addon system for additional content sources
 - Embbed servers intergrated with an adblocker if prefered 
-- Downloads for offline playback (movies, episodes, music)
+- Downloads for offline playback (movies, tv shows)
 - Casting support (Google Cast, DLNA)
 - Picture-in-picture, background audio, and a full music player
 - Parental controls with PIN-protected profiles
