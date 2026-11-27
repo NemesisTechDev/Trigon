@@ -19,7 +19,7 @@
 class UpdateConfig {
   UpdateConfig._();
 
-  static const String _defaultRepo = 'YOUR-GITHUB-USER/YOUR-REPO';
+  static const String _defaultRepo = 'NemesisTechDev/trigon';
 
   /// GitHub `owner/repo` whose Releases carry the APKs.
   static const String githubRepo = String.fromEnvironment(
