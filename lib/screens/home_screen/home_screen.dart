@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import '../../services/parental/parental_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show compute;
 import 'package:google_fonts/google_fonts.dart';
 
 import '../main_nav/navigation_controller.dart';
@@ -330,18 +331,39 @@ class _HomeScreenState extends State<HomeScreen> {
   /// shouldn't stop the rest from precaching.
   void _precacheHeroBackdrops() {
     if (!mounted) return;
-    for (final item in featuredItems) {
-      final itemId = item["Id"];
-      if (itemId == null) continue;
-      final url = MediaService.getImageUrl(itemId, type: "Backdrop", maxWidth: 1200);
-      unawaited(
-        precacheImage(
-          CachedNetworkImageProvider(url, cacheManager: NemesisImageCache.instance),
-          context,
-        ).catchError((_) {}),
-      );
-    }
+    // Wait for the frame that builds the hero so we know the exact decode
+    // size it uses. The old precache had no maxWidth/maxHeight, so it cached
+    // a full-size decode under a different key than the memCacheWidth/Height
+    // image the hero actually displays: every backdrop was decoded twice and
+    // the precached copy was never used.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final w = _heroBackdropCacheWidth(context);
+      final h = _lastHeroBackdropCacheHeight;
+      if (h <= 0) return;
+      for (final item in featuredItems) {
+        final itemId = item["Id"];
+        if (itemId == null) continue;
+        final url =
+            MediaService.getImageUrl(itemId, type: "Backdrop", maxWidth: 1200);
+        unawaited(
+          precacheImage(
+            CachedNetworkImageProvider(
+              url,
+              cacheManager: NemesisImageCache.instance,
+              maxWidth: w,
+              maxHeight: h,
+            ),
+            context,
+          ).catchError((_) {}),
+        );
+      }
+    });
   }
+
+  // Decode height (px) the hero backdrop was last built with; see
+  // [_precacheHeroBackdrops].
+  int _lastHeroBackdropCacheHeight = 0;
 
   /// Loads everything Home needs. `silent` skips the loading spinner and
   /// swallows errors, keeping whatever's already on screen (cached or
@@ -534,16 +556,36 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  Timer? _saveCacheTimer;
+
+  /// Every section that lands calls this, which used to jsonEncode the whole
+  /// Home payload on the UI thread each time (3+ times per load, while the
+  /// user is already scrolling). Now the calls are coalesced into one write
+  /// shortly after the last section arrives, and the encode runs in a
+  /// background isolate.
   Future<void> _saveCache() async {
+    _saveCacheTimer?.cancel();
+    _saveCacheTimer = Timer(const Duration(seconds: 2), () {
+      unawaited(_writeCacheNow());
+    });
+  }
+
+  Future<void> _writeCacheNow() async {
     try {
-      final payload = jsonEncode({
+      final snapshot = {
         "libraries": libraries,
         "resumeItems": resumeItems,
         "featuredItems": featuredItems,
         "latestByLibrary": latestByLibrary,
         "trendingMovies": trendingMovies,
         "trendingShows": trendingShows,
-      });
+      };
+      String payload;
+      try {
+        payload = await compute(_encodeHomeSnapshot, snapshot);
+      } catch (_) {
+        payload = jsonEncode(snapshot);
+      }
       await StorageService.saveHomeCache(payload);
     } catch (_) {
       // Caching is a best-effort optimization; never let it disrupt Home.
@@ -1479,6 +1521,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHeroBackdrop(dynamic item, double height, {Key? key}) {
+    _lastHeroBackdropCacheHeight =
+        (height * MediaQuery.devicePixelRatioOf(context)).round();
     final itemId = item["Id"];
     final backdropUrl = MediaService.getImageUrl(
       itemId,
@@ -1588,6 +1632,8 @@ class _HomeScreenState extends State<HomeScreen> {
   /// fade the portrait version uses so the hero still hands off
   /// cleanly into the page content below it.
   Widget _buildHeroBackdropLandscape(dynamic item, double height, {Key? key}) {
+    _lastHeroBackdropCacheHeight =
+        (height * MediaQuery.devicePixelRatioOf(context)).round();
     final itemId = item["Id"];
     final backdropUrl = MediaService.getImageUrl(
       itemId,
@@ -2758,3 +2804,7 @@ class _HeroBackdropClipper extends CustomClipper<Rect> {
       oldClipper.bottomInset != bottomInset ||
       oldClipper.leftInset != leftInset;
 }
+
+// Top level so compute() can run it in a background isolate (`Object`, not a
+// typed Map: generics are lost across an isolate boundary).
+String _encodeHomeSnapshot(Object snapshot) => jsonEncode(snapshot);

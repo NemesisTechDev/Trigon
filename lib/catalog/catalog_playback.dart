@@ -162,6 +162,7 @@ class CatalogPlayback {
     required CatalogTitle title,
     required AddonStream stream,
     CatalogEpisode? episode,
+    List<AddonStream> fallbacks = const [],
   }) async {
     final manager = PlayerManager.instance;
     final startedId = current.id;
@@ -192,23 +193,38 @@ class CatalogPlayback {
       seconds: stream.isTorrent ? 8 : 3,
     );
 
+    // The picked link first, then the other links of the same quality: a
+    // link that cannot be prepared (a torrent without peers, say) hands over
+    // to the next one while the current stream keeps playing.
+    final candidates = [stream, ...fallbacks];
     try {
-      unawaited(SourcePreferences.instance
-          .remember('${title.type.tmdb}:${title.tmdbId}', stream));
+      for (var i = 0; i < candidates.length; i++) {
+        final candidate = candidates[i];
+        try {
+          final item = await buildItemResolved(
+            title: title,
+            stream: candidate,
+            episode: episode,
+            resumeAt: resumeAt,
+          );
 
-      final item = await buildItemResolved(
-        title: title,
-        stream: stream,
-        episode: episode,
-        resumeAt: resumeAt,
-      );
+          // The person may have closed the player or moved on while this
+          // loaded.
+          if (manager.currentItem?.id != startedId) return;
 
-      // The person may have closed the player or moved on while this loaded.
-      if (manager.currentItem?.id != startedId) return;
-
-      await PlaybackService.playQueue([item], source: PlaybackSource.unknown);
-    } on TorrentException catch (e) {
-      say(e.message, seconds: 8);
+          unawaited(SourcePreferences.instance
+              .remember('${title.type.tmdb}:${title.tmdbId}', candidate));
+          await PlaybackService.playQueue([item],
+              source: PlaybackSource.unknown);
+          return;
+        } on TorrentException catch (e) {
+          if (i == candidates.length - 1) {
+            say(e.message, seconds: 8);
+            return;
+          }
+          debugPrint('[CatalogPlayback] link failed, trying the next: $e');
+        }
+      }
     } catch (e) {
       debugPrint('[CatalogPlayback] quality switch failed: $e');
       say('Could not switch quality. Still playing the previous one.');

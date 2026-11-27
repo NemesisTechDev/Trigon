@@ -372,7 +372,7 @@ class StorageService {
 
   static Future<bool> getShareUsageData() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_shareUsageData) ?? true;
+    return prefs.getBool(_shareUsageData) ?? false;
   }
 
   /// Downloads only run on Wi-Fi / ethernet. On unless turned off.

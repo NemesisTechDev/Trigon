@@ -507,7 +507,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             _settingsTile(
               icon: Icons.settings_outlined,
               label: "Settings",
-              subtitle: "Playback, cache, and parental control options",
+              subtitle: "Playback, sources, downloads, and parental controls",
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(

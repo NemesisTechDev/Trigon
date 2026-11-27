@@ -249,27 +249,32 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   String _qualityModeSubtitle(PlaybackQualityMode mode) {
     switch (mode) {
       case PlaybackQualityMode.dataSaver:
-        return "Always streams at a reduced quality"
-            "to save data, regardless of your connection";
+        return "Always streams at a reduced quality to save data, "
+            "regardless of your connection.\n"
+            "Auto-Select Link: picks 360p (480p if there is no 360p), "
+            "choosing the smallest file.";
       case PlaybackQualityMode.standard:
         return "Automatically adjusts video and music quality to your "
-            "current network conditions";
+            "current network conditions.\n"
+            "Auto-Select Link: picks 720p, choosing the smallest file.";
       case PlaybackQualityMode.maxQuality:
         return "Always streams at the best available quality, "
-            "regardless of your connection";
+            "regardless of your connection.\n"
+            "Auto-Select Link: picks 1080p (1440p if that is what "
+            "exists), choosing the best file format whatever its size. "
+            "4K only plays when you choose it yourself.";
     }
   }
 
-  /// Short one-line summary shown on the Settings row itself — same
-  /// wording as the dialog's subtitle, just condensed to fit one line.
+  /// Short one-line summary shown on the Settings row itself.
   String _qualityModeSummary(PlaybackQualityMode mode) {
     switch (mode) {
       case PlaybackQualityMode.dataSaver:
-        return "Data Saver, always reduced quality";
+        return "Data Saver, 360p to 480p links";
       case PlaybackQualityMode.standard:
-        return "Default, adapts to your network";
+        return "Default, adapts to your network, 720p links";
       case PlaybackQualityMode.maxQuality:
-        return "Max Quality, always the best available";
+        return "Max Quality, 1080p to 1440p links";
     }
   }
 
@@ -300,6 +305,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                     _qualityModeLabel(mode),
                     style: const TextStyle(color: Colors.white),
                   ),
+                  isThreeLine: true,
                   subtitle: Text(
                     _qualityModeSubtitle(mode),
                     style: const TextStyle(
@@ -540,6 +546,18 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
               children: [
                 _sectionLabel("Playback"),
             const SizedBox(height: 10),
+            ValueListenableBuilder<PlaybackQualityMode>(
+              valueListenable: AppSettings.playbackQualityMode,
+              builder: (context, mode, _) {
+                return _settingsTile(
+                  icon: Icons.network_check,
+                  label: "Streaming Quality",
+                  subtitle: _qualityModeSummary(mode),
+                  onTap: _editPlaybackQualityMode,
+                );
+              },
+            ),
+            const SizedBox(height: 10),
             ValueListenableBuilder<bool>(
               valueListenable: AppSettings.autoQueueRecommendations,
               builder: (context, enabled, _) {
@@ -556,8 +574,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                 );
               },
             ),
-            const SizedBox(height: 24),
-            _sectionLabel("Subtitles"),
             const SizedBox(height: 10),
             ValueListenableBuilder<SubtitleAppearance>(
               valueListenable: SubtitleAppearanceSettings.notifier,
@@ -579,39 +595,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
               },
             ),
             const SizedBox(height: 24),
-            _sectionLabel("Data Usage"),
-            const SizedBox(height: 10),
-            ValueListenableBuilder<PlaybackQualityMode>(
-              valueListenable: AppSettings.playbackQualityMode,
-              builder: (context, mode, _) {
-                return _settingsTile(
-                  icon: Icons.network_check,
-                  label: "Streaming Quality",
-                  subtitle: _qualityModeSummary(mode),
-                  onTap: _editPlaybackQualityMode,
-                );
-              },
-            ),
-            const SizedBox(height: 10),
-            ValueListenableBuilder<bool>(
-              valueListenable: AppSettings.autoLinkSelection,
-              builder: (context, enabled, _) {
-                return _toggleTile(
-                  icon: Icons.auto_awesome,
-                  label: "Auto-Select Link",
-                  subtitle: enabled
-                      ? "Plays the best link for your streaming quality, "
-                          "skipping the link list"
-                      : "Shows the link list so you pick a link each time",
-                  value: enabled,
-                  onChanged: (value) {
-                    AppSettings.setAutoLinkSelection(value);
-                  },
-                );
-              },
-            ),
-            const SizedBox(height: 24),
-            _sectionLabel("Playback Source"),
+            _sectionLabel("Sources"),
             const SizedBox(height: 10),
             ValueListenableBuilder<PlaybackSourceMode>(
               valueListenable: AppSettings.playbackSourceMode,
@@ -652,6 +636,25 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                           );
                         },
                       ),
+                      const SizedBox(height: 10),
+                        ValueListenableBuilder<bool>(
+                          valueListenable: AppSettings.autoLinkSelection,
+                          builder: (context, enabled, _) {
+                            return _toggleTile(
+                              icon: Icons.auto_awesome,
+                              label: "Auto-Select Link",
+                              subtitle: enabled
+                                  ? "Plays the best direct link for your Streaming "
+                                      "Quality (torrent only as a fallback), "
+                                      "skipping the link list"
+                                  : "Shows the link list so you pick a link each time",
+                              value: enabled,
+                              onChanged: (value) {
+                                AppSettings.setAutoLinkSelection(value);
+                              },
+                            );
+                          },
+                        ),
                     ],
                     if (source == PlaybackSourceMode.embed) ...[
                       const SizedBox(height: 10),
@@ -690,47 +693,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
               },
             ),
             const SizedBox(height: 24),
-            _sectionLabel("Family"),
-            const SizedBox(height: 10),
-            ValueListenableBuilder(
-              valueListenable: ParentalControls.instance.settings,
-              builder: (context, _, __) => ValueListenableBuilder(
-                valueListenable: ParentalControls.instance.pausedUntil,
-                builder: (context, _, __) => _settingsTile(
-                  icon: Icons.shield_outlined,
-                  label: "Parental Controls",
-                  subtitle: ParentalControls.instance.summary,
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const ParentalControlsScreen(),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            _sectionLabel("Storage"),
+            _sectionLabel("Downloads & storage"),
             const SizedBox(height: 10),
             StorageUsageCard(key: _storageCardKey),
-            const SizedBox(height: 10),
-            ValueListenableBuilder<bool>(
-              valueListenable: AppSettings.shareUsageData,
-              builder: (context, enabled, _) {
-                return _toggleTile(
-                  icon: Icons.insights_outlined,
-                  label: "Share Usage Data",
-                  subtitle: enabled
-                      ? "Anonymous stats help improve the app"
-                      : "No usage data is collected",
-                  value: enabled,
-                  onChanged: (value) {
-                    AppSettings.setShareUsageData(value);
-                  },
-                );
-              },
-            ),
             const SizedBox(height: 10),
             ValueListenableBuilder<bool>(
               valueListenable: AppSettings.downloadWifiOnly,
@@ -766,6 +731,46 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
               subtitle: "Delete every downloaded movie, episode, and song",
               onTap: _removeAllDownloads,
               destructive: true,
+            ),
+            const SizedBox(height: 24),
+            _sectionLabel("Family"),
+            const SizedBox(height: 10),
+            ValueListenableBuilder(
+              valueListenable: ParentalControls.instance.settings,
+              builder: (context, _, __) => ValueListenableBuilder(
+                valueListenable: ParentalControls.instance.pausedUntil,
+                builder: (context, _, __) => _settingsTile(
+                  icon: Icons.shield_outlined,
+                  label: "Parental Controls",
+                  subtitle: ParentalControls.instance.summary,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ParentalControlsScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            _sectionLabel("Privacy"),
+            const SizedBox(height: 10),
+            ValueListenableBuilder<bool>(
+              valueListenable: AppSettings.shareUsageData,
+              builder: (context, enabled, _) {
+                return _toggleTile(
+                  icon: Icons.insights_outlined,
+                  label: "Share Usage Data",
+                  subtitle: enabled
+                      ? "Anonymous stats help improve the app"
+                      : "No usage data is collected",
+                  value: enabled,
+                  onChanged: (value) {
+                    AppSettings.setShareUsageData(value);
+                  },
+                );
+              },
             ),
             const SizedBox(height: 24),
             _sectionLabel("About"),

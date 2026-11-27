@@ -11,6 +11,7 @@ import '../../addons/stream_info.dart';
 import '../../addons/stream_rules.dart';
 import '../../addons/stream_summary.dart';
 import '../../catalog/catalog_models.dart';
+import '../../catalog/release_gate.dart';
 import '../../catalog/tmdb_catalog_service.dart';
 import '../../services/download_manager.dart';
 import '../../virtual/virtual_catalog.dart';
@@ -119,6 +120,14 @@ class _AddonDownloadSheetState extends State<_AddonDownloadSheet> {
         setState(() {
           _searching = false;
           _problem = 'Could not load this title. Check your connection.';
+        });
+        return;
+      }
+      final notOut = ReleaseGate.blockedMessage(title, episode: episode);
+      if (notOut != null) {
+        setState(() {
+          _searching = false;
+          _problem = notOut;
         });
         return;
       }

@@ -130,6 +130,19 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
     });
   }
 
+  // A file opened through Open With / Play With is a one-off: it has no
+  // library entry, so favoriting it or opening the song-options menu does
+  // nothing useful. Those two buttons are shown faded and inert for it.
+  bool _isExternalFile(MediaItem item) => item.raw?['IsExternalFile'] == true;
+
+  Widget _fadedIfExternal(MediaItem item, Widget button) {
+    if (!_isExternalFile(item)) return button;
+    return Opacity(
+      opacity: 0.3,
+      child: IgnorePointer(child: ExcludeSemantics(child: button)),
+    );
+  }
+
   // Opens the same three-dot menu song rows use (favorite, add to
   // playlist, add to queue, download, go to album/artist) for
   // whatever's currently playing. That sheet operates on the raw
@@ -363,12 +376,15 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                 // layout below.
                 const CastButton(),
 
-                IconButton(
-                  icon: const Icon(
-                    Icons.more_vert,
-                    color: Colors.white,
+                _fadedIfExternal(
+                  item,
+                  IconButton(
+                    icon: const Icon(
+                      Icons.more_vert,
+                      color: Colors.white,
+                    ),
+                    onPressed: () => _openSongOptions(context, item),
                   ),
-                  onPressed: () => _openSongOptions(context, item),
                 ),
               ],
             ),
@@ -547,18 +563,21 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                         ValueListenableBuilder<bool>(
                           valueListenable: manager.isFavorite,
                           builder: (_, isFavorite, __) {
-                            return IconButton(
-                              icon: Icon(
-                                isFavorite
-                                    ? Icons.favorite
-                                    : Icons.favorite_border,
-                                color: isFavorite
-                                    ? Colors.red
-                                    : Colors.white,
+                            return _fadedIfExternal(
+                              item,
+                              IconButton(
+                                icon: Icon(
+                                  isFavorite
+                                      ? Icons.favorite
+                                      : Icons.favorite_border,
+                                  color: isFavorite
+                                      ? Colors.red
+                                      : Colors.white,
+                                ),
+                                onPressed: () {
+                                  manager.toggleFavorite();
+                                },
                               ),
-                              onPressed: () {
-                                manager.toggleFavorite();
-                              },
                             );
                           },
                         ),
@@ -816,18 +835,21 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                           ValueListenableBuilder<bool>(
                             valueListenable: manager.isFavorite,
                             builder: (_, isFavorite, __) {
-                              return IconButton(
-                                icon: Icon(
-                                  isFavorite
-                                      ? Icons.favorite
-                                      : Icons.favorite_border,
-                                  color: isFavorite
-                                      ? Colors.red
-                                      : Colors.white,
+                              return _fadedIfExternal(
+                                item,
+                                IconButton(
+                                  icon: Icon(
+                                    isFavorite
+                                        ? Icons.favorite
+                                        : Icons.favorite_border,
+                                    color: isFavorite
+                                        ? Colors.red
+                                        : Colors.white,
+                                  ),
+                                  onPressed: () {
+                                    manager.toggleFavorite();
+                                  },
                                 ),
-                                onPressed: () {
-                                  manager.toggleFavorite();
-                                },
                               );
                             },
                           ),
@@ -838,12 +860,15 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                           // portrait layout above.
                           const CastButton(),
 
-                          IconButton(
-                            icon: const Icon(
-                              Icons.more_vert,
-                              color: Colors.white,
+                          _fadedIfExternal(
+                            item,
+                            IconButton(
+                              icon: const Icon(
+                                Icons.more_vert,
+                                color: Colors.white,
+                              ),
+                              onPressed: () => _openSongOptions(context, item),
                             ),
-                            onPressed: () => _openSongOptions(context, item),
                           ),
                         ],
                       ),

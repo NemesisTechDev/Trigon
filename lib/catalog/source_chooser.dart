@@ -12,6 +12,7 @@ import '../services/external_media_handler.dart';
 import 'auto_link_selector.dart';
 import 'catalog_models.dart';
 import 'link_fallback.dart';
+import 'release_gate.dart';
 import 'tmdb_catalog_service.dart';
 
 /// The one place the UI asks "which stream should this play?".
@@ -50,6 +51,14 @@ class SourceChooser {
     // A new choice replaces whatever link fallback was watching an earlier
     // one (auto selection starts a new one below).
     LinkFallbackCoordinator.instance.end();
+
+    // Safety net: callers check this first, but nothing may look for links
+    // to a title (or episode) that is not out yet.
+    final notOut = ReleaseGate.blockedMessage(title, episode: episode);
+    if (notOut != null) {
+      _announce(context, notOut);
+      return null;
+    }
 
     final prefs = SourcePreferences.instance;
     await prefs.load();
@@ -138,11 +147,12 @@ class SourceChooser {
 
     final mode = AppSettings.playbackQualityMode.value;
     // Started now, runs alongside the addons (it used to run first).
-    final ctxFuture = _contextFor(title);
+    final ctxFuture = contextFor(title);
     var ctx = LinkContext(titleName: title.title);
     AutoLinkChoice? choice;
     _LinkCollector? collector;
     var sawLinks = false;
+    var sawFourK = false;
     try {
       for (var attempt = 0; attempt < 2 && choice == null; attempt++) {
         collector?.dispose();
@@ -155,6 +165,7 @@ class SourceChooser {
         final latest = await collector.settle();
         ctx = await ctxFuture;
         if (latest.isNotEmpty) sawLinks = true;
+        if (AutoLinkSelector.hasFourKLinks(latest, ctx: ctx)) sawFourK = true;
         choice = AutoLinkSelector.selectAlways(latest, mode, ctx: ctx);
         // Links came back but none may be played: asking again returns the
         // same links, so only an empty answer is worth a second try.
@@ -168,7 +179,10 @@ class SourceChooser {
       collector?.dispose();
       _announce(
         context,
-        sawLinks
+        sawFourK
+            ? 'Only 4K links were found. 4K never plays automatically: '
+                'turn off Auto-Select Link in Settings to choose one.'
+            : sawLinks
             ? 'No suitable links found for this title.'
             : 'No links found for this title. Check your connection and try again.',
       );
@@ -195,7 +209,7 @@ class SourceChooser {
   /// What the never-select rules need to know about [title]: its name and
   /// original language. Saved snapshots (history, watchlist) do not keep the
   /// language, so it is looked up (cached, bounded) when missing.
-  static Future<LinkContext> _contextFor(CatalogTitle title) async {
+  static Future<LinkContext> contextFor(CatalogTitle title) async {
     var language = title.originalLanguage;
     if (language == null) {
       try {

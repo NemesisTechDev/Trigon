@@ -1365,8 +1365,15 @@ class PlayerManager {
       bufferedPosition.value = value;
     });
 
+    // Audio-switch stall watchdog (see _beginAudioSwitchWatch): every
+    // position tick proves frames are moving.
+    player.stream.position.listen((_) => _onAudioSwitchPositionTick());
+
     player.stream.buffering.listen((value) {
-      buffering.value = value;
+      // `_audioSwitchStalled` keeps the indicator up after an audio-track
+      // switch until frames are really moving again, even if mpv itself
+      // reports `buffering == false` while the frame is frozen.
+      buffering.value = value || _audioSwitchStalled;
 
       // A genuine mid-playback stall is stronger evidence the current
       // quality is too high for this connection than a passing bandwidth
@@ -1374,7 +1381,11 @@ class PlayerManager {
       // downgrade (see NetworkQualityService.reportRebuffer). Only
       // counts once something is actually playing, not the initial
       // buffer-before-first-frame every item goes through on open.
-      if (value && currentItem != null && playing.value) {
+      // (A pause caused by switching audio tracks is not a bad network.)
+      if (value &&
+          currentItem != null &&
+          playing.value &&
+          !_inAudioSwitchGrace) {
         NetworkQualityService.instance.reportRebuffer();
       }
     });
@@ -2519,7 +2530,114 @@ class PlayerManager {
       return;
     }
 
-    await _applyNativeAudioTrack(track);
+    await _applyAudioTrackSmoothly(track);
+  }
+
+  // ---------------------------------------------------------------------
+  // Audio-track switching on a network stream.
+  //
+  // mpv only keeps the packets of the audio track that is selected, so
+  // switching means the demuxer re-reads the stream from the current
+  // position to find the new track's audio. mpv's normal `cache-pause`
+  // behaviour is left untouched: while the new audio is fetched, mpv
+  // pauses for cache, reports `buffering`, and the app's buffering
+  // indicator shows until playback continues.
+  //
+  // As a safety net, a small watchdog forces `buffering` on if the position
+  // stops advancing after a switch, and clears it once playback really
+  // continues.
+  // ---------------------------------------------------------------------
+  static const Duration _audioSwitchGrace = Duration(seconds: 4);
+  static const Duration _audioSwitchStallDelay = Duration(milliseconds: 600);
+  static const Duration _audioSwitchMaxWait = Duration(seconds: 20);
+  DateTime? _audioSwitchGraceUntil;
+  Timer? _audioSwitchStallTimer;
+  Timer? _audioSwitchMaxTimer;
+  Timer? _audioSwitchGraceTimer;
+  bool _audioSwitchWatching = false;
+  bool _audioSwitchStalled = false;
+
+  /// True for a few seconds after a switch so the pause it causes is not
+  /// reported as a bad network (see the `buffering` listener).
+  bool get _inAudioSwitchGrace {
+    if (_audioSwitchWatching) return true;
+    final until = _audioSwitchGraceUntil;
+    return until != null && DateTime.now().isBefore(until);
+  }
+
+  void _beginAudioSwitchWatch() {
+    _endAudioSwitchWatch();
+    _audioSwitchWatching = true;
+    _audioSwitchGraceUntil = DateTime.now().add(_audioSwitchGrace);
+    _armAudioSwitchStallTimer();
+    // If playback never stalls, stop watching after the grace window; if it did stall, keep the indicator up
+    // until playback resumes, bounded by the max wait.
+    _audioSwitchGraceTimer = Timer(_audioSwitchGrace, () {
+      if (!_audioSwitchStalled) _endAudioSwitchWatch();
+    });
+    _audioSwitchMaxTimer = Timer(_audioSwitchMaxWait, _endAudioSwitchWatch);
+  }
+
+  void _armAudioSwitchStallTimer() {
+    _audioSwitchStallTimer?.cancel();
+    _audioSwitchStallTimer = Timer(_audioSwitchStallDelay, () {
+      if (!_audioSwitchWatching) return;
+      // Paused by the person: nothing is being waited for.
+      if (!playing.value) {
+        _armAudioSwitchStallTimer();
+        return;
+      }
+      // No position tick for a while although we are meant to be
+      // playing: the frame is frozen waiting for the new audio.
+      _audioSwitchStalled = true;
+      buffering.value = true;
+    });
+  }
+
+  void _onAudioSwitchPositionTick() {
+    if (!_audioSwitchWatching) return;
+    if (_audioSwitchStalled) {
+      // Playback continued with the new track: drop the indicator and
+      // stop watching.
+      _endAudioSwitchWatch();
+      return;
+    }
+    _armAudioSwitchStallTimer();
+  }
+
+  void _endAudioSwitchWatch() {
+    final wasStalled = _audioSwitchStalled;
+    _audioSwitchWatching = false;
+    _audioSwitchStalled = false;
+    _audioSwitchStallTimer?.cancel();
+    _audioSwitchMaxTimer?.cancel();
+    _audioSwitchGraceTimer?.cancel();
+    _audioSwitchStallTimer = null;
+    _audioSwitchMaxTimer = null;
+    _audioSwitchGraceTimer = null;
+    if (wasStalled) buffering.value = player.state.buffering;
+  }
+
+  Future<void> _applyAudioTrackSmoothly(AudioTrack track) async {
+    final item = currentItem;
+
+    final isNetworkVideo = item != null &&
+        !item.audioOnly &&
+        !item.live &&
+        item.streamUrl.startsWith('http');
+
+    if (!isNetworkVideo) {
+      await _applyNativeAudioTrack(track);
+      return;
+    }
+
+    _beginAudioSwitchWatch();
+    try {
+      await _applyNativeAudioTrack(track);
+    } catch (_) {
+      _endAudioSwitchWatch();
+      rethrow;
+    }
   }
 
   /// The actual, non-reopening mpv track switch — used both by
@@ -4218,6 +4336,7 @@ class PlayerManager {
       }
     }
     loading.value = false;
+    _audioSwitchStalled = false;
     buffering.value = false;
   }
 
@@ -5717,6 +5836,7 @@ class PlayerManager {
 
       // Close the black loading screen straight away...
       loading.value = false;
+      _audioSwitchStalled = false;
       buffering.value = false;
       playbackFinished.value = false;
       playbackFinished.value = true;
@@ -6015,6 +6135,7 @@ class PlayerManager {
     currentItemNotifier.value = null;
     showMiniPlayer.value = false;
     loading.value = false;
+    _audioSwitchStalled = false;
     buffering.value = false;
     showNextEpisode.value = false;
     nextEpisode.value = null;

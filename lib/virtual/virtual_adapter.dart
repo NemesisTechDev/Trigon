@@ -10,6 +10,11 @@ import 'virtual_catalog.dart';
 import 'virtual_collection_discovery.dart';
 import 'virtual_collection_favorites.dart';
 
+// Top level so compute() can run it in a background isolate. Parameter is
+// `Object` (not a typed Map): generics are lost when a message crosses an
+// isolate boundary.
+String _encodeJson(Object data) => jsonEncode(data);
+
 /// Who is "signed in". The login screen is a placeholder, so this is only a
 /// display name.
 class VirtualSession {
@@ -39,7 +44,7 @@ class VirtualJellyfinAdapter implements HttpClientAdapter {
       final result = await _route(method, path, q, options.data);
       if (result == null) return _empty(404);
       if (result == _noContent) return _empty(204);
-      return _json(result, 200);
+      return await _json(result, 200);
     } on ParentalBlockedException catch (e) {
       // Blocked by Parental Controls: an ordinary "forbidden" to the screens.
       return _json({'error': e.decision.message, 'Restricted': true}, 403);
@@ -258,9 +263,27 @@ class VirtualJellyfinAdapter implements HttpClientAdapter {
     return VirtualCollectionFavorites.markFavorites(result);
   }
 
-  ResponseBody _json(Object data, int status) {
+  /// Lists at least this long are serialised in a background isolate: this
+  /// "server" runs inside the app, so a 100-500 item grid used to be
+  /// jsonEncode'd on the UI thread in one long frame-dropping chunk.
+  static const int _isolateEncodeMinItems = 40;
+
+  static Future<String> _encode(Object data) async {
+    final items = data is Map ? data['Items'] : data;
+    if (items is List && items.length >= _isolateEncodeMinItems) {
+      try {
+        return await compute(_encodeJson, data);
+      } catch (_) {
+        // Not sendable to an isolate (e.g. custom toJson objects): fall
+        // through to the plain in-line encode.
+      }
+    }
+    return jsonEncode(data);
+  }
+
+  Future<ResponseBody> _json(Object data, int status) async {
     return ResponseBody.fromString(
-      jsonEncode(data),
+      await _encode(data),
       status,
       headers: {
         Headers.contentTypeHeader: ['application/json; charset=utf-8'],

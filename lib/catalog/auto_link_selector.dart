@@ -1,5 +1,6 @@
 import '../addons/addon_models.dart';
 import '../addons/link_ranking.dart';
+import '../addons/stream_info.dart';
 import '../addons/stream_rules.dart';
 import '../services/app_settings.dart';
 
@@ -31,8 +32,13 @@ class AutoLinkChoice {
 /// Streaming Quality setting, so the link list never has to be shown.
 ///
 ///  - Default      -> 720p
-///  - Max Quality  -> 1080p
+///  - Max Quality  -> 1080p, or 1440p when that is what exists
 ///  - Data Saver   -> 360p, otherwise 480p
+///
+/// 4K (2160p and above) is NEVER picked here, not even as a last resort or
+/// a fallback: a 4K link only plays when the person chooses it themselves
+/// (the link list, or the 4K row of the player's Video Quality sheet; see
+/// [qualityChoices]). When nothing but 4K exists, null is returned.
 ///
 /// Links that must never be picked are dropped first (see [StreamRules]):
 /// HLS streams, anything from vidlink, CAM recordings, and links whose audio
@@ -81,6 +87,22 @@ class AutoLinkSelector {
   /// torrent.
   static const int maxOtherQualityDirects = 2;
 
+  /// From this height up a link counts as 4K (2160p; 4320p too).
+  static const int fourKMinHeight = 2000;
+  static bool isFourK(int height) => height >= fourKMinHeight;
+
+  /// True when [streams] hold a link that may be played but is 4K (so an
+  /// empty automatic pick can say why).
+  static bool hasFourKLinks(
+    List<AddonStream> streams, {
+    LinkContext ctx = LinkContext.none,
+  }) {
+    for (final s in streams) {
+      if (isFourK(s.height) && !StreamRules.isExcluded(s, ctx)) return true;
+    }
+    return false;
+  }
+
   /// The qualities the setting asks for, best match first. Using one of
   /// these is NOT an override (Data Saver may use 480p when 360p is missing).
   static List<int> wanted(PlaybackQualityMode mode) {
@@ -90,7 +112,8 @@ class AutoLinkSelector {
       case PlaybackQualityMode.standard:
         return const [720];
       case PlaybackQualityMode.maxQuality:
-        return const [1080];
+        // 1080p first; 1440p counts as wanted too (not an override), 4K never.
+        return const [1080, 1440];
     }
   }
 
@@ -195,6 +218,8 @@ class AutoLinkSelector {
     // (height 0 = quality not stated) and ranked.
     final groups =
         LinkRanking.groupByQuality(streams, ctx, requireSwarm: requireSwarm);
+    // 4K is manual-only: never part of an automatic pick or its fallbacks.
+    groups.removeWhere((height, _) => isFourK(height));
     if (groups.isEmpty) return null;
 
     final heights = _heightOrder(groups.keys, mode);
@@ -239,6 +264,47 @@ class AutoLinkSelector {
       overridden: overridden,
       fallbacks: queue.skip(1).toList(),
     );
+  }
+
+  /// One row per quality for the player's Video Quality sheet, highest first
+  /// (unknown last), 4K included because the person is choosing by hand.
+  ///
+  /// Each row's link is the one the automatic selection would use at that
+  /// quality: the never-select rules apply ([StreamRules]); a direct link
+  /// beats a torrent; direct links are ranked like [select] does (smallest
+  /// file first with Default / Data Saver, best file type with Max Quality);
+  /// torrents by seeders, then peers. [QualityChoice.fallbacks] holds the
+  /// next links of the same quality, in that order.
+  static List<QualityChoice> qualityChoices(
+    List<AddonStream> streams,
+    PlaybackQualityMode mode, {
+    LinkContext ctx = LinkContext.none,
+  }) {
+    final groups =
+        LinkRanking.groupByQuality(streams, ctx, requireSwarm: false);
+    final heights = groups.keys.toList()
+      ..sort((a, b) {
+        if (a == 0) return 1;
+        if (b == 0) return -1;
+        return b.compareTo(a);
+      });
+    final out = <QualityChoice>[];
+    for (final h in heights) {
+      final g = groups[h]!;
+      final ordered = <RankedLink>[
+        ..._directsInOrder(g, mode).take(maxDirectsPerQuality),
+        ...g.torrents.take(maxTorrentFallbacks),
+      ];
+      if (ordered.isEmpty) continue;
+      out.add(QualityChoice(
+        height: h,
+        best: ordered.first.stream,
+        info: ordered.first.info,
+        sources: g.directs.length + g.torrents.length,
+        fallbacks: [for (final c in ordered.skip(1)) c.stream],
+      ));
+    }
+    return out;
   }
 
   /// The qualities that have a link, in the order they are tried: the ones

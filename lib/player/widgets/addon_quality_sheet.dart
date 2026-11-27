@@ -5,8 +5,11 @@ import 'package:flutter/material.dart';
 import '../../addons/addon_manager.dart';
 import '../../addons/addon_models.dart';
 import '../../addons/stream_info.dart';
+import '../../catalog/auto_link_selector.dart';
 import '../../catalog/catalog_models.dart';
 import '../../catalog/catalog_playback.dart';
+import '../../catalog/source_chooser.dart';
+import '../../services/app_settings.dart';
 import '../../catalog/tmdb_catalog_service.dart';
 import '../../library/watch_entry.dart';
 import '../../widgets/shared/nemesis_bottom_sheet.dart';
@@ -94,6 +97,11 @@ class _AddonQualitySheetState extends State<AddonQualitySheet> {
 
       _title = title;
       _episode = episode;
+      // Same rules as Auto-Select Link: never-select links left out, links
+      // ranked the way the current Streaming Quality ranks them.
+      final ctx = await SourceChooser.contextFor(title);
+      if (!mounted) return;
+      final mode = AppSettings.playbackQualityMode.value;
       final id = episode != null
           ? title.addonId(season: episode.season, episode: episode.number)
           : title.addonId();
@@ -101,7 +109,8 @@ class _AddonQualitySheetState extends State<AddonQualitySheet> {
       _sub = AddonManager.instance.watchStreams(title.type.addon, id).listen(
         (batch) {
           if (!mounted) return;
-          setState(() => _choices = bestPerQuality(batch));
+          setState(() => _choices =
+              AutoLinkSelector.qualityChoices(batch, mode, ctx: ctx));
         },
         onDone: () {
           if (!mounted) return;
@@ -133,6 +142,7 @@ class _AddonQualitySheetState extends State<AddonQualitySheet> {
       title: title,
       stream: choice.best,
       episode: _episode,
+      fallbacks: choice.fallbacks,
     ));
   }
 
@@ -188,9 +198,10 @@ class _AddonQualitySheetState extends State<AddonQualitySheet> {
             const Padding(
               padding: EdgeInsets.fromLTRB(20, 10, 20, 16),
               child: Text(
-                'Each quality uses its best source: a direct link when there '
-                'is one, otherwise the torrent with the most seeders and '
-                'peers. Playback continues from where you are.',
+                'Each quality uses the link Auto-Select Link would pick for it: a '
+                'direct link when there is one, otherwise the torrent with '
+                'the most seeders and peers. 4K only plays when you choose '
+                'it here. Playback continues from where you are.',
                 style: TextStyle(
                     color: Colors.white38, fontSize: 12, height: 1.35),
               ),

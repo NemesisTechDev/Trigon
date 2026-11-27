@@ -173,7 +173,13 @@ class QualityChoice {
     required this.best,
     required this.info,
     required this.sources,
+    this.fallbacks = const [],
   });
+
+  /// Other links of the same quality to try, best first, if [best] cannot
+  /// be opened. Only filled by the Streaming-Quality-aware selection
+  /// (AutoLinkSelector.qualityChoices).
+  final List<AddonStream> fallbacks;
 
   /// 0 when the addons did not say.
   final int height;

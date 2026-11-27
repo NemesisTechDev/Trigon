@@ -12,7 +12,7 @@ import 'jellyfin_services/storage_service.dart';
 /// use the app, how often they come back, which screens they open, and a few
 /// key actions (play, download).
 ///
-/// - Switched by Settings > "Share Usage Data" (on by default). Off means
+/// - Switched by Settings > "Share Usage Data" (off by default). Off means
 ///   nothing is collected or sent.
 /// - Never throws and never slows the app: if Firebase did not start, or any
 ///   call fails, it quietly does nothing.

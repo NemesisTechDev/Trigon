@@ -191,10 +191,13 @@ class AudioSelector extends StatelessWidget {
 
                   subtitle: Text(track.language),
 
-                  onTap: () async {
-                    await manager.selectAudioTrack(track);
-
-                    if (context.mounted) Navigator.pop(context);
+                  onTap: () {
+                    // Close at once and let the switch finish on its own:
+                    // the sheet used to stay open until mpv acknowledged
+                    // the change, which on a network stream made a quick
+                    // audio switch feel like the player was reloading.
+                    Navigator.pop(context);
+                    unawaited(manager.selectAudioTrack(track));
                   },
                 );
               },

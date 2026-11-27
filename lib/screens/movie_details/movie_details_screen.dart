@@ -258,8 +258,44 @@ class _MovieDetailsScreenState
     item = widget.initialItem;
     favorite = widget.initialItem?["UserData"]?["IsFavorite"] ?? false;
     loading = widget.initialItem == null;
-    loadMovie();
-    unawaited(_ensureLogo());
+    if (widget.initialItem != null) {
+      // The page is already painted from the preview item, so the network /
+      // parsing work can wait until the route transition has finished
+      // instead of competing with its animation (the stutter on opening a
+      // title). Nothing visible changes: loadMovie() silently upgrades it.
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await _afterRouteSettles();
+        if (!mounted) return;
+        unawaited(loadMovie());
+        unawaited(_ensureLogo());
+      });
+    } else {
+      loadMovie();
+      unawaited(_ensureLogo());
+    }
+  }
+
+  /// Completes once this page's push transition has finished (or after a
+  /// short safety timeout, or at once if there is no transition running).
+  Future<void> _afterRouteSettles() async {
+    if (!mounted) return;
+    final anim = ModalRoute.of(context)?.animation;
+    if (anim == null || anim.status == AnimationStatus.completed) return;
+    final done = Completer<void>();
+    void listener(AnimationStatus status) {
+      if (status == AnimationStatus.completed ||
+          status == AnimationStatus.dismissed) {
+        if (!done.isCompleted) done.complete();
+      }
+    }
+
+    anim.addStatusListener(listener);
+    try {
+      await done.future.timeout(const Duration(milliseconds: 900),
+          onTimeout: () {});
+    } finally {
+      anim.removeStatusListener(listener);
+    }
   }
 
   /// A title opened from a list may not have its logo yet: look it up and

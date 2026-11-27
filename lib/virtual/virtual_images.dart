@@ -4,6 +4,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// Top level so compute() can run it in a background isolate (`Object`, not a
+// typed Map: generics are lost across an isolate boundary).
+String _encodePaths(Object paths) => jsonEncode(paths);
+
 /// Maps a virtual item id + Jellyfin image type to a TMDB image path.
 ///
 /// The original screens build image URLs synchronously from just an item id
@@ -89,7 +93,18 @@ class VirtualImages {
 
   static void _scheduleSave() {
     _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(seconds: 3), _save);
+    // Browsing a big grid registers new ids constantly; a short debounce
+    // re-encoded the whole (up to 4000 entry) table every few seconds
+    // mid-scroll. [flush] saves it when the app is backgrounded instead.
+    _saveTimer = Timer(const Duration(seconds: 12), _save);
+  }
+
+  /// Saves right away if a save is pending (call when the app is paused).
+  static Future<void> flush() async {
+    final t = _saveTimer;
+    if (t == null || !t.isActive) return;
+    t.cancel();
+    await _save();
   }
 
   static Future<void> _save() async {
@@ -103,7 +118,13 @@ class VirtualImages {
         toSave = _paths;
       }
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_prefsKey, jsonEncode(toSave));
+      String encoded;
+      try {
+        encoded = await compute(_encodePaths, toSave);
+      } catch (_) {
+        encoded = jsonEncode(toSave);
+      }
+      await prefs.setString(_prefsKey, encoded);
     } catch (e) {
       debugPrint('[VirtualImages] save failed: $e');
     }

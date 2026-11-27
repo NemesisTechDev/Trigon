@@ -135,18 +135,27 @@ class TmdbCatalogService {
         final res = await _dio.get(
           '$_base$path',
           queryParameters: params,
-          options: Options(headers: headers),
+          // Plain text on purpose: the body is decoded below (off the UI
+          // thread when large) and the very same text is written to the
+          // disk cache, so nothing is ever re-encoded on the UI thread.
+          options: Options(headers: headers, responseType: ResponseType.plain),
         );
         if (clock.elapsedMilliseconds > 2000) {
           debugPrint('[TmdbCatalog] slow: $path took '
               '${clock.elapsedMilliseconds} ms (attempt $attempt)');
         }
         final code = res.statusCode ?? 0;
-        if (code == 200 && res.data is Map) {
-          final data = Map<String, dynamic>.from(res.data as Map);
-          _cache[cacheKey] = _Cached(data, DateTime.now());
-          unawaited(_TmdbDisk.write(cacheKey, data));
-          return data;
+        final raw = res.data;
+        if (code == 200 && raw is String) {
+          final decoded = raw.length > _isolateDecodeThreshold
+              ? await compute(_decodeJsonText, raw)
+              : _decodeJsonText(raw);
+          if (decoded is Map) {
+            final data = Map<String, dynamic>.from(decoded);
+            _cache[cacheKey] = _Cached(data, DateTime.now());
+            unawaited(_TmdbDisk.writeRaw(cacheKey, raw));
+            return data;
+          }
         }
         final retryable = code == 429 || code >= 500;
         if (retryable && attempt < maxAttempts) {
@@ -331,6 +340,13 @@ class _Cached {
   _Cached(this.data, this.at);
 }
 
+/// Bodies larger than this are decoded in a background isolate (the same
+/// threshold Dio's own BackgroundTransformer uses).
+const int _isolateDecodeThreshold = 40000;
+
+// Top level so compute() can run it in a background isolate.
+Object? _decodeJsonText(String text) => jsonDecode(text);
+
 /// Small on-disk store for TMDB answers (one JSON file per request).
 class _TmdbDisk {
   static Future<Directory?>? _dirFuture;
@@ -367,7 +383,10 @@ class _TmdbDisk {
       if (dir == null) return null;
       final file = File('${dir.path}/${_name(key)}');
       if (!await file.exists()) return null;
-      final j = jsonDecode(await file.readAsString());
+      final text = await file.readAsString();
+      final j = text.length > _isolateDecodeThreshold
+          ? await compute(_decodeJsonText, text)
+          : _decodeJsonText(text);
       if (j is! Map || j['k'] != key || j['d'] is! Map) return null;
       return (
         data: Map<String, dynamic>.from(j['d'] as Map),
@@ -376,6 +395,20 @@ class _TmdbDisk {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Writes an already-serialised TMDB body. Same file shape as [write]
+  /// produces ({"k","t","d"}), built by string concatenation so the body is
+  /// not jsonEncode'd again on the UI thread.
+  static Future<void> writeRaw(String key, String rawJson) async {
+    try {
+      final dir = await _directory();
+      if (dir == null) return;
+      final file = File('${dir.path}/${_name(key)}');
+      await file.writeAsString(
+          '{"k":${jsonEncode(key)},"t":${DateTime.now().millisecondsSinceEpoch},"d":$rawJson}');
+      if (++_writes % 200 == 0) await _prune(dir);
+    } catch (_) {}
   }
 
   static Future<void> write(String key, Map<String, dynamic> data) async {

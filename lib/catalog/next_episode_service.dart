@@ -7,6 +7,7 @@ import '../library/source_preferences.dart';
 import '../services/app_settings.dart';
 import 'auto_link_selector.dart';
 import 'catalog_models.dart';
+import 'release_gate.dart';
 import 'tmdb_catalog_service.dart';
 
 /// Works out which episode comes after another, and which stream to use for
@@ -98,6 +99,10 @@ class NextEpisodeService {
     CatalogTitle title,
     CatalogEpisode episode,
   ) async {
+    // An episode that has not aired yet has nothing real to play.
+    if (ReleaseGate.blockedMessage(title, episode: episode) != null) {
+      return null;
+    }
     final id = title.addonId(season: episode.season, episode: episode.number);
     // After 15 s whatever has arrived is used (a slow addon does not make the
     // quick addons' links useless).

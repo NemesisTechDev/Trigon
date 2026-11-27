@@ -102,8 +102,8 @@ class AppSettings {
 
   /// Sends anonymous usage statistics (screens opened, plays, downloads) to
   /// Firebase Analytics so the developer can see how the app is used. Off =
-  /// nothing is collected. On by default.
-  static final ValueNotifier<bool> shareUsageData = ValueNotifier(true);
+  /// nothing is collected. Off by default (opt-in).
+  static final ValueNotifier<bool> shareUsageData = ValueNotifier(false);
 
   /// Call once at app startup (works whether or not the person is logged
   /// in yet — this doesn't touch the server).

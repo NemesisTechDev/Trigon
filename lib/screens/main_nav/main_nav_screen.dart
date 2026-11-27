@@ -18,6 +18,7 @@ import '../../services/jellyfin_services/jellyfin_client.dart';
 import '../../services/jellyfin_services/media_service.dart';
 import '../../services/jellyfin_services/storage_service.dart';
 import '../../services/library_prefetcher.dart';
+import '../../virtual/virtual_images.dart';
 import '../../services/profile_name_service.dart';
 import '../../widgets/common/pressable.dart';
 import '../../utils/responsive.dart';
@@ -193,6 +194,9 @@ class _MainNavScreenState extends State<MainNavScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
+    if (state == AppLifecycleState.paused) {
+      VirtualImages.flush(); // fire-and-forget; best effort
+    }
     if (state == AppLifecycleState.resumed &&
         _lastLifecycleState == AppLifecycleState.paused) {
       JellyfinClient.closeIdleConnections();

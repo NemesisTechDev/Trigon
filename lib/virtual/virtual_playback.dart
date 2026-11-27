@@ -7,6 +7,7 @@ import '../catalog/binge_coordinator.dart';
 import '../catalog/catalog_models.dart';
 import '../catalog/catalog_playback.dart';
 import '../catalog/link_fallback.dart';
+import '../catalog/release_gate.dart';
 import '../catalog/source_chooser.dart';
 import '../catalog/tmdb_catalog_service.dart';
 import '../embed/embed_player_screen.dart';
@@ -96,6 +97,14 @@ class VirtualPlayback {
       if (title == null) {
         _abort('Could not load this title. Check your connection.',
             fromPlayer: fromPlayer);
+        return;
+      }
+
+      // Never look for links to something that is not out yet (addons
+      // answer for any id, often with fake or camera-recording links).
+      final notOut = ReleaseGate.blockedMessage(title, episode: episode);
+      if (notOut != null) {
+        _abort(notOut, fromPlayer: fromPlayer);
         return;
       }
       // Embed servers: hand over to the web player instead of the addons.
